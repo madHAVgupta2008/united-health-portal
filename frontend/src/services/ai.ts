@@ -2,7 +2,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // Initialize the API with key from environment variables
 // Note: In a production app, this should be proxied through a backend to protect the key
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
+const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || 'AIzaSyBQjVtdAM7JHPRT2bxplrRrm92vkID1-9I';
 
 let genAI: GoogleGenerativeAI | null = null;
 let model: any = null;
