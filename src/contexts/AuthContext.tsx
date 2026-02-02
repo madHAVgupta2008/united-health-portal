@@ -1,13 +1,27 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { v4 as uuidv4 } from 'uuid';
-import { User } from '@/types';
+import { supabase } from '@/integrations/supabase/client';
+import { User as SupabaseUser } from '@supabase/supabase-js';
+import { getProfile, updateProfile as updateProfileService, Profile } from '@/services/profileService';
+
+interface User {
+  id: string;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  address?: string;
+  dateOfBirth?: string;
+  memberId?: string;
+  planType?: string;
+}
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
+  isLoading: boolean;
   login: (email: string, password: string) => Promise<boolean>;
-  signup: (userData: Partial<User> & { password: string }) => Promise<boolean>;
-  logout: () => void;
+  signup: (userData: { email: string; password: string; firstName?: string; lastName?: string }) => Promise<boolean>;
+  logout: () => Promise<void>;
   updateUser: (updatedData: Partial<User>) => Promise<boolean>;
 }
 
@@ -15,93 +29,158 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  interface StoredUser extends User {
-    password: string;
-  }
+  // Convert Supabase user + profile to our User type
+  const loadUserProfile = async (supabaseUser: SupabaseUser): Promise<User | null> => {
+    try {
+      const profile = await getProfile(supabaseUser.id);
+      
+      if (!profile) {
+        // Profile should be created automatically by trigger, but handle edge case
+        return {
+          id: supabaseUser.id,
+          email: supabaseUser.email || '',
+        };
+      }
 
-  useEffect(() => {
-    const savedUser = localStorage.getItem('app_user');
-    if (savedUser) {
-      setUser(JSON.parse(savedUser));
+      return {
+        id: profile.id,
+        email: profile.email,
+        firstName: profile.firstName,
+        lastName: profile.lastName,
+        phone: profile.phone,
+        address: profile.address,
+        dateOfBirth: profile.dateOfBirth,
+        memberId: profile.memberId,
+        planType: profile.planType,
+      };
+    } catch (error) {
+      console.error('Error loading user profile:', error);
+      return null;
     }
+  };
+
+  // Initialize auth state
+  useEffect(() => {
+    // Check active session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        loadUserProfile(session.user).then(setUser);
+      }
+      setIsLoading(false);
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+        const userProfile = await loadUserProfile(session.user);
+        setUser(userProfile);
+      } else {
+        setUser(null);
+      }
+      setIsLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const login = async (email: string, password: string): Promise<boolean> => {
-    const usersDb = localStorage.getItem('app_users_db');
-    if (usersDb) {
-      const users: StoredUser[] = JSON.parse(usersDb);
-      const foundUser = users.find(u => u.email === email && u.password === password);
-      if (foundUser) {
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        const { password: _, ...userWithoutPassword } = foundUser;
-        setUser(userWithoutPassword);
-        localStorage.setItem('app_user', JSON.stringify(userWithoutPassword));
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        console.error('Login error:', error);
+        return false;
+      }
+
+      if (data.user) {
+        const userProfile = await loadUserProfile(data.user);
+        setUser(userProfile);
         return true;
       }
+
+      return false;
+    } catch (error) {
+      console.error('Login exception:', error);
+      return false;
     }
-    return false;
   };
 
-  const signup = async (userData: Partial<User> & { password: string }): Promise<boolean> => {
-    if (userData.email && userData.password) {
-      const newUser: StoredUser = {
-        id: uuidv4(),
+  const signup = async (userData: { 
+    email: string; 
+    password: string; 
+    firstName?: string; 
+    lastName?: string;
+  }): Promise<boolean> => {
+    try {
+      const { data, error } = await supabase.auth.signUp({
         email: userData.email,
-        firstName: userData.firstName || '',
-        lastName: userData.lastName || '',
-        memberId: `UH-2024-${Math.floor(Math.random() * 1000000).toString().padStart(6, '0')}`,
-        planType: 'Standard',
         password: userData.password,
-        ...userData,
-      };
-      
-      // Save to session
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { password: _, ...userWithoutPassword } = newUser;
-      setUser(userWithoutPassword);
-      localStorage.setItem('app_user', JSON.stringify(userWithoutPassword));
+        options: {
+          data: {
+            firstName: userData.firstName || '',
+            lastName: userData.lastName || '',
+          },
+        },
+      });
 
-      // Save to "database"
-      const usersDb = localStorage.getItem('app_users_db');
-      const users: StoredUser[] = usersDb ? JSON.parse(usersDb) : [];
-      users.push(newUser);
-      localStorage.setItem('app_users_db', JSON.stringify(users));
+      if (error) {
+        console.error('Signup error:', error);
+        return false;
+      }
 
-      return true;
+      if (data.user) {
+        // Profile will be created automatically by the trigger
+        // Wait a moment for the trigger to complete
+        await new Promise(resolve => setTimeout(resolve, 500));
+        const userProfile = await loadUserProfile(data.user);
+        setUser(userProfile);
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error('Signup exception:', error);
+      return false;
     }
-    return false;
   };
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem('app_user');
+  const logout = async (): Promise<void> => {
+    try {
+      await supabase.auth.signOut();
+      setUser(null);
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
 
   const updateUser = async (updatedData: Partial<User>): Promise<boolean> => {
     if (!user) return false;
 
-    // Update session
-    const updatedUser = { ...user, ...updatedData };
-    setUser(updatedUser);
-    localStorage.setItem('app_user', JSON.stringify(updatedUser));
+    try {
+      await updateProfileService(user.id, {
+        firstName: updatedData.firstName,
+        lastName: updatedData.lastName,
+        phone: updatedData.phone,
+        address: updatedData.address,
+        dateOfBirth: updatedData.dateOfBirth,
+        planType: updatedData.planType,
+      });
 
-    // Update "database"
-    const usersDb = localStorage.getItem('app_users_db');
-    if (usersDb) {
-        const users: StoredUser[] = JSON.parse(usersDb);
-        const userIndex = users.findIndex(u => u.id === user.id);
-        if (userIndex >= 0) {
-            users[userIndex] = { ...users[userIndex], ...updatedData };
-            localStorage.setItem('app_users_db', JSON.stringify(users));
-        }
+      setUser({ ...user, ...updatedData });
+      return true;
+    } catch (error) {
+      console.error('Update user error:', error);
+      return false;
     }
-
-    return true;
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, login, signup, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, login, signup, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

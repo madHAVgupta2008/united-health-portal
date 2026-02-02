@@ -29,7 +29,7 @@ const BillUpload: React.FC = () => {
     setUploadedFiles(files);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!formData.hospitalName || !formData.billDate || !formData.amount || uploadedFiles.length === 0) {
       toast({
         title: 'Missing Information',
@@ -39,21 +39,29 @@ const BillUpload: React.FC = () => {
       return;
     }
 
-    addBill({
-      hospitalName: formData.hospitalName,
-      billDate: formData.billDate,
-      amount: parseFloat(formData.amount),
-      description: formData.description,
-    });
+    try {
+      await addBill({
+        hospitalName: formData.hospitalName,
+        billDate: formData.billDate,
+        amount: parseFloat(formData.amount),
+        description: formData.description,
+      }, uploadedFiles[0]); // Pass the first file
 
-    toast({
-      title: 'Bill Submitted',
-      description: 'Your hospital bill has been uploaded for processing.',
-    });
+      toast({
+        title: 'Bill Submitted',
+        description: 'Your hospital bill has been uploaded for processing.',
+      });
 
-    // Reset form
-    setFormData({ hospitalName: '', billDate: '', amount: '', description: '' });
-    setUploadedFiles([]);
+      // Reset form
+      setFormData({ hospitalName: '', billDate: '', amount: '', description: '' });
+      setUploadedFiles([]);
+    } catch (error) {
+      toast({
+        title: 'Upload Failed',
+        description: 'There was an error uploading your bill. Please try again.',
+        variant: 'destructive',
+      });
+    }
   };
 
   return (

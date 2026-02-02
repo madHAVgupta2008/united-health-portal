@@ -21,7 +21,7 @@ const InsuranceUpload: React.FC = () => {
     setUploadedFiles(files);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!documentType || uploadedFiles.length === 0) {
       toast({
         title: 'Missing Information',
@@ -31,23 +31,30 @@ const InsuranceUpload: React.FC = () => {
       return;
     }
 
-    // Process each uploaded file
-    uploadedFiles.forEach(file => {
-      uploadDocument({
+    try {
+      // Process the first uploaded file
+      const file = uploadedFiles[0];
+      await uploadDocument({
         fileName: file.name,
         fileType: documentTypes.find(t => t.value === documentType)?.label || 'Document',
-      });
-    });
+      }, file);
 
-    toast({
-      title: 'Documents Submitted',
-      description: 'Your insurance documents have been uploaded successfully.',
-    });
-    
-    // Reset form
-    setDocumentType('');
-    setNotes('');
-    setUploadedFiles([]);
+      toast({
+        title: 'Documents Submitted',
+        description: 'Your insurance documents have been uploaded successfully.',
+      });
+      
+      // Reset form
+      setDocumentType('');
+      setNotes('');
+      setUploadedFiles([]);
+    } catch (error) {
+      toast({
+        title: 'Upload Failed',
+        description: 'There was an error uploading your documents. Please try again.',
+        variant: 'destructive',
+      });
+    }
   };
 
   const documentTypes = [
