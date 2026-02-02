@@ -92,7 +92,7 @@ export const addBill = async (
     .single();
 
   if (error) {
-    console.error('Error adding bill:', error);
+    console.error('Error adding bill to database:', error);
     throw error;
   }
 

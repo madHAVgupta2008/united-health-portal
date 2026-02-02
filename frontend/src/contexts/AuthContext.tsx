@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { User as SupabaseUser } from '@supabase/supabase-js';
-import { getProfile, updateProfile as updateProfileService } from '@/services/profileService';
+import { getProfile, updateProfile as updateProfileService, createProfile } from '@/services/profileService';
 
 interface User {
   id: string;
@@ -37,9 +37,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const profile = await getProfile(supabaseUser.id);
       
       if (!profile) {
-        return {
-          id: supabaseUser.id,
+        // Create initial profile if it doesn't exist (e.g. if trigger failed or user existed before trigger)
+        console.log('Profile missing, creating initial profile for:', supabaseUser.id);
+        const newProfile = await createProfile(supabaseUser.id, {
           email: supabaseUser.email || '',
+        });
+        
+        return {
+          id: newProfile.id,
+          email: newProfile.email,
+          firstName: newProfile.firstName,
+          lastName: newProfile.lastName,
+          phone: newProfile.phone,
+          address: newProfile.address,
+          dateOfBirth: newProfile.dateOfBirth,
+          memberId: newProfile.memberId,
+          planType: newProfile.planType,
         };
       }
 

@@ -85,7 +85,7 @@ export const uploadDocument = async (
     .single();
 
   if (error) {
-    console.error('Error adding document record:', error);
+    console.error('Error adding document record to database:', error);
     throw error;
   }
 
