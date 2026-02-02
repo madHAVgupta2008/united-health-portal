@@ -150,9 +150,9 @@ const Login: React.FC = () => {
                 <input type="checkbox" className="rounded border-border" />
                 <span className="text-sm text-muted-foreground">Remember me</span>
               </label>
-              <a href="#" className="text-sm text-primary hover:underline">
+              <Link to="/forgot-password" className="text-sm text-primary hover:underline">
                 Forgot password?
-              </a>
+              </Link>
             </div>
 
             <Button

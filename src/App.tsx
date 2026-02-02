@@ -16,6 +16,7 @@ import BillUpload from "./pages/BillUpload";
 import AIChat from "./pages/AIChat";
 import InsuranceHistory from "./pages/InsuranceHistory";
 import BillHistory from "./pages/BillHistory";
+import ForgotPassword from "./pages/ForgotPassword";
 import DashboardLayout from "./components/layout/DashboardLayout";
 import NotFound from "./pages/NotFound";
 
@@ -33,6 +34,7 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
             
             {/* Protected Dashboard Routes */}
             <Route element={<DashboardLayout />}>

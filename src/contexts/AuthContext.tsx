@@ -20,9 +20,10 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<boolean>;
-  signup: (userData: { email: string; password: string; firstName?: string; lastName?: string }) => Promise<boolean>;
+  signup: (userData: { email: string; password: string; firstName?: string; lastName?: string; phone?: string }) => Promise<boolean>;
   logout: () => Promise<void>;
   updateUser: (updatedData: Partial<User>) => Promise<boolean>;
+  resetPassword: (email: string) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -115,6 +116,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     password: string; 
     firstName?: string; 
     lastName?: string;
+    phone?: string;
   }): Promise<boolean> => {
     try {
       const { data, error } = await supabase.auth.signUp({
@@ -179,8 +181,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  const resetPassword = async (email: string): Promise<boolean> => {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+
+      if (error) {
+        console.error('Password reset error:', error);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Password reset exception:', error);
+      return false;
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, login, signup, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, login, signup, logout, updateUser, resetPassword }}>
       {children}
     </AuthContext.Provider>
   );
