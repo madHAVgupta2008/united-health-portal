@@ -1,16 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { BACKEND_CONFIG } from '@/config/backend';
 import { supabase } from '@/integrations/supabase/client';
 import { User as SupabaseUser } from '@supabase/supabase-js';
 import { getProfile, updateProfile as updateProfileService } from '@/services/profileService';
-import {
-  localSignup,
-  localLogin,
-  localLogout,
-  localGetCurrentUser,
-  localUpdateUser,
-  localResetPassword
-} from '@/services/localAuthService';
 
 interface User {
   id: string;
@@ -40,9 +31,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const isLocalMode = BACKEND_CONFIG.mode === 'localStorage';
 
-  // ============ SUPABASE MODE ============
   const loadUserProfile = async (supabaseUser: SupabaseUser): Promise<User | null> => {
     try {
       const profile = await getProfile(supabaseUser.id);
@@ -73,64 +62,46 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Initialize auth state
   useEffect(() => {
-    if (isLocalMode) {
-      // localStorage mode - check for saved user
-      const savedUser = localGetCurrentUser();
-      setUser(savedUser);
+    // Supabase mode
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        loadUserProfile(session.user).then(setUser);
+      }
       setIsLoading(false);
-    } else {
-      // Supabase mode
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session?.user) {
-          loadUserProfile(session.user).then(setUser);
-        }
-        setIsLoading(false);
-      });
+    });
 
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-        if (session?.user) {
-          const userProfile = await loadUserProfile(session.user);
-          setUser(userProfile);
-        } else {
-          setUser(null);
-        }
-        setIsLoading(false);
-      });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+        const userProfile = await loadUserProfile(session.user);
+        setUser(userProfile);
+      } else {
+        setUser(null);
+      }
+      setIsLoading(false);
+    });
 
-      return () => subscription.unsubscribe();
-    }
-  }, [isLocalMode]);
+    return () => subscription.unsubscribe();
+  }, []);
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      if (isLocalMode) {
-        // localStorage login
-        const result = await localLogin(email, password);
-        if (result.success && result.user) {
-          setUser(result.user);
-          return true;
-        }
-        return false;
-      } else {
-        // Supabase login
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-        if (error) {
-          console.error('Login error:', error);
-          return false;
-        }
-
-        if (data.user) {
-          const userProfile = await loadUserProfile(data.user);
-          setUser(userProfile);
-          return true;
-        }
-
+      if (error) {
+        console.error('Login error:', error);
         return false;
       }
+
+      if (data.user) {
+        const userProfile = await loadUserProfile(data.user);
+        setUser(userProfile);
+        return true;
+      }
+
+      return false;
     } catch (error) {
       console.error('Login exception:', error);
       return false;
@@ -145,41 +116,30 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     phone?: string;
   }): Promise<boolean> => {
     try {
-      if (isLocalMode) {
-        // localStorage signup
-        const result = await localSignup(userData);
-        if(result.success && result.user) {
-          setUser(result.user);
-          return true;
-        }
-        return false;
-      } else {
-        // Supabase signup
-        const { data, error } = await supabase.auth.signUp({
-          email: userData.email,
-          password: userData.password,
-          options: {
-            data: {
-              firstName: userData.firstName || '',
-              lastName: userData.lastName || '',
-            },
+      const { data, error } = await supabase.auth.signUp({
+        email: userData.email,
+        password: userData.password,
+        options: {
+          data: {
+            firstName: userData.firstName || '',
+            lastName: userData.lastName || '',
           },
-        });
+        },
+      });
 
-        if (error) {
-          console.error('Signup error:', error);
-          return false;
-        }
-
-        if (data.user) {
-          await new Promise(resolve => setTimeout(resolve, 500));
-          const userProfile = await loadUserProfile(data.user);
-          setUser(userProfile);
-          return true;
-        }
-
+      if (error) {
+        console.error('Signup error:', error);
         return false;
       }
+
+      if (data.user) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        const userProfile = await loadUserProfile(data.user);
+        setUser(userProfile);
+        return true;
+      }
+
+      return false;
     } catch (error) {
       console.error('Signup exception:', error);
       return false;
@@ -188,13 +148,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const logout = async (): Promise<void> => {
     try {
-      if (isLocalMode) {
-        await localLogout();
-        setUser(null);
-      } else {
-        await supabase.auth.signOut();
-        setUser(null);
-      }
+      await supabase.auth.signOut();
+      setUser(null);
     } catch (error) {
       console.error('Logout error:', error);
     }
@@ -204,26 +159,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!user) return false;
 
     try {
-      if (isLocalMode) {
-        const result = await localUpdateUser(user.id, updatedData);
-        if (result.success) {
-          setUser({ ...user, ...updatedData });
-          return true;
-        }
-        return false;
-      } else {
-        await updateProfileService(user.id, {
-          firstName: updatedData.firstName,
-          lastName: updatedData.lastName,
-          phone: updatedData.phone,
-          address: updatedData.address,
-          dateOfBirth: updatedData.dateOfBirth,
-          planType: updatedData.planType,
-        });
+      await updateProfileService(user.id, {
+        firstName: updatedData.firstName,
+        lastName: updatedData.lastName,
+        phone: updatedData.phone,
+        address: updatedData.address,
+        dateOfBirth: updatedData.dateOfBirth,
+        planType: updatedData.planType,
+      });
 
-        setUser({ ...user, ...updatedData });
-        return true;
-      }
+      setUser({ ...user, ...updatedData });
+      return true;
     } catch (error) {
       console.error('Update user error:', error);
       return false;
@@ -232,21 +178,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const resetPassword = async (email: string): Promise<boolean> => {
     try {
-      if (isLocalMode) {
-        const result = await localResetPassword(email);
-        return result.success;
-      } else {
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}/reset-password`,
-        });
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
 
-        if (error) {
-          console.error('Password reset error:', error);
-          return false;
-        }
-
-        return true;
+      if (error) {
+        console.error('Password reset error:', error);
+        return false;
       }
+
+      return true;
     } catch (error) {
       console.error('Password reset exception:', error);
       return false;

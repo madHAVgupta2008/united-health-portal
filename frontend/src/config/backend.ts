@@ -1,17 +1,15 @@
 // Backend Mode Configuration
-// Toggle between localStorage and Supabase
+// Strictly using Supabase
 
 export const BACKEND_CONFIG = {
-  // Set to 'localStorage' to use local storage (no Supabase needed)
-  // Set to 'supabase' to use Supabase backend
-  mode: 'localStorage' as 'localStorage' | 'supabase',
+  mode: 'supabase' as const,
   
   // Feature flags
   features: {
-    realTimeChat: false, // Only works with Supabase
-    fileStorage: false,   // Only works with Supabase
+    realTimeChat: true,
+    fileStorage: true,
   }
 };
 
-export const isLocalStorageMode = () => BACKEND_CONFIG.mode === 'localStorage';
-export const isSupabaseMode = () => BACKEND_CONFIG.mode === 'supabase';
+export const isLocalStorageMode = () => false;
+export const isSupabaseMode = () => true;

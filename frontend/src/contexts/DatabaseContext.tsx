@@ -1,10 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useAuth } from './AuthContext';
-import { BACKEND_CONFIG } from '@/config/backend';
 import { getBills, addBill as addBillService, Bill } from '@/services/billService';
 import { getDocuments, uploadDocument as uploadDocumentService, InsuranceDocument } from '@/services/insuranceService';
 import { getChatHistory, saveChatMessage, ChatMessage as ChatMsg } from '@/services/chatService';
-import { v4 as uuidv4 } from 'uuid';
 
 interface HospitalBill {
   id: string;
@@ -51,9 +49,8 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [insuranceFiles, setInsuranceFiles] = useState<InsuranceFile[]>([]);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const isLocalMode = BACKEND_CONFIG.mode === 'localStorage';
 
-  // Convert service types to context types (for Supabase mode)
+  // Convert service types to context types
   const convertBill = (bill: Bill): HospitalBill => ({
     id: bill.id,
     hospitalName: bill.hospitalName,
@@ -101,31 +98,16 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
     try {
       setIsLoading(true);
       
-      if (isLocalMode) {
-        // localStorage mode
-        const savedBills = localStorage.getItem('app_bills');
-        const savedDocs = localStorage.getItem('app_documents');
-        const savedChat = localStorage.getItem('app_chat');
+      // Supabase mode only
+      const [billsData, docsData, chatData] = await Promise.all([
+        getBills(user.id),
+        getDocuments(user.id),
+        getChatHistory(user.id),
+      ]);
 
-        setBills(savedBills ? JSON.parse(savedBills) : []);
-        setInsuranceFiles(savedDocs ? JSON.parse(savedDocs) : []);
-        const chatData = savedChat ? JSON.parse(savedChat) : [];
-        setChatHistory(chatData.map((msg: any) => ({
-          ...msg,
-          timestamp: new Date(msg.timestamp)
-        })));
-      } else {
-        // Supabase mode
-        const [billsData, docsData, chatData] = await Promise.all([
-          getBills(user.id),
-          getDocuments(user.id),
-          getChatHistory(user.id),
-        ]);
-
-        setBills(billsData.map(convertBill));
-        setInsuranceFiles(docsData.map(convertDocument));
-        setChatHistory(chatData.map(convertChatMessage));
-      }
+      setBills(billsData.map(convertBill));
+      setInsuranceFiles(docsData.map(convertDocument));
+      setChatHistory(chatData.map(convertChatMessage));
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -135,7 +117,7 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
 
   useEffect(() => {
     loadData();
-  }, [user, isAuthenticated, isLocalMode]);
+  }, [user, isAuthenticated]);
 
   const addBill = async (
     billData: Omit<HospitalBill, 'id' | 'status' | 'fileUrl'>,
@@ -144,31 +126,18 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
     if (!user) throw new Error('User not authenticated');
 
     try {
-      if (isLocalMode) {
-        // localStorage mode - no file storage
-        const newBill: HospitalBill = {
-          id: uuidv4(),
-          status: 'pending',
-          fileUrl: file ? file.name : undefined,
-          ...billData,
-        };
-        const updatedBills = [newBill, ...bills];
-        setBills(updatedBills);
-        localStorage.setItem('app_bills', JSON.stringify(updatedBills));
-      } else {
-        // Supabase mode
-        const newBill = await addBillService(
-          user.id,
-          {
-            hospitalName: billData.hospitalName,
-            billDate: billData.billDate,
-            amount: billData.amount,
-            description: billData.description,
-          },
-          file
-        );
-        setBills(prev => [convertBill(newBill), ...prev]);
-      }
+      // Supabase mode only
+      const newBill = await addBillService(
+        user.id,
+        {
+          hospitalName: billData.hospitalName,
+          billDate: billData.billDate,
+          amount: billData.amount,
+          description: billData.description,
+        },
+        file
+      );
+      setBills(prev => [convertBill(newBill), ...prev]);
     } catch (error) {
       console.error('Error adding bill:', error);
       throw error;
@@ -182,30 +151,16 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
     if (!user) throw new Error('User not authenticated');
 
     try {
-      if (isLocalMode) {
-        // localStorage mode - no file storage
-        const newDoc: InsuranceFile = {
-          id: uuidv4(),
-          uploadDate: new Date().toISOString().split('T')[0],
-          status: 'pending',
-          fileSize: `${(file.size / 1024 / 1024).toFixed(2)} MB`,
-          ...docData,
-        };
-        const updatedDocs = [newDoc, ...insuranceFiles];
-        setInsuranceFiles(updatedDocs);
-        localStorage.setItem('app_documents', JSON.stringify(updatedDocs));
-      } else {
-        // Supabase mode
-        const newDoc = await uploadDocumentService(
-          user.id,
-          {
-            fileName: docData.fileName,
-            fileType: docData.fileType,
-          },
-          file
-        );
-        setInsuranceFiles(prev => [convertDocument(newDoc), ...prev]);
-      }
+      // Supabase mode only
+      const newDoc = await uploadDocumentService(
+        user.id,
+        {
+          fileName: docData.fileName,
+          fileType: docData.fileType,
+        },
+        file
+      );
+      setInsuranceFiles(prev => [convertDocument(newDoc), ...prev]);
     } catch (error) {
       console.error('Error uploading document:', error);
       throw error;
@@ -219,14 +174,8 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
       // Optimistically add to UI
       setChatHistory(prev => [...prev, message]);
 
-      if (isLocalMode) {
-        // localStorage mode
-        const updatedChat = [...chatHistory, message];
-        localStorage.setItem('app_chat', JSON.stringify(updatedChat));
-      } else {
-        // Supabase mode
-        await saveChatMessage(user.id, message.content, message.sender);
-      }
+      // Supabase mode only
+      await saveChatMessage(user.id, message.content, message.sender);
     } catch (error) {
       console.error('Error saving chat message:', error);
       // Revert on error
