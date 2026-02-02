@@ -172,7 +172,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!user) return false;
 
     try {
-      await updateProfileService(user.id, {
+      console.log('Attempting to update profile for user:', user.id, 'with data:', updatedData);
+      const result = await updateProfileService(user.id, {
         firstName: updatedData.firstName,
         lastName: updatedData.lastName,
         phone: updatedData.phone,
@@ -181,10 +182,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         planType: updatedData.planType,
       });
 
+      console.log('Profile update successful in database:', result.id);
       setUser({ ...user, ...updatedData });
       return true;
     } catch (error) {
-      console.error('Update user error:', error);
+      console.error('Update user profile error:', error);
       return false;
     }
   };

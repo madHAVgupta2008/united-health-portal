@@ -20,6 +20,20 @@ const AccountInfo: React.FC = () => {
     dateOfBirth: user?.dateOfBirth || '',
   });
 
+  // Sync state when user context loads/updates
+  React.useEffect(() => {
+    if (user && !isEditing) {
+      setFormData({
+        firstName: user.firstName || '',
+        lastName: user.lastName || '',
+        email: user.email || '',
+        phone: user.phone || '',
+        address: user.address || '',
+        dateOfBirth: user.dateOfBirth || '',
+      });
+    }
+  }, [user, isEditing]);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };

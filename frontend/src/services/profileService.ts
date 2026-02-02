@@ -67,6 +67,7 @@ export const updateProfile = async (
   if (profileData.dateOfBirth !== undefined) updateData.date_of_birth = profileData.dateOfBirth;
   if (profileData.planType !== undefined) updateData.plan_type = profileData.planType;
 
+  console.log('Sending profile update to Supabase:', updateData);
   const { data, error } = await supabase
     .from('profiles')
     .update(updateData)
