@@ -18,6 +18,7 @@ const AccountInfo: React.FC = () => {
     phone: user?.phone || '',
     address: user?.address || '',
     dateOfBirth: user?.dateOfBirth || '',
+    planType: user?.planType || 'Standard',
   });
 
   // Sync state when user context loads/updates
@@ -30,6 +31,7 @@ const AccountInfo: React.FC = () => {
         phone: user.phone || '',
         address: user.address || '',
         dateOfBirth: user.dateOfBirth || '',
+        planType: user.planType || 'Standard',
       });
     }
   }, [user, isEditing]);
@@ -39,6 +41,7 @@ const AccountInfo: React.FC = () => {
   };
 
   const handleSave = async () => {
+    console.log('handleSave called in AccountInfo with:', formData);
     const success = await updateUser(formData);
     
     if (success) {
@@ -180,6 +183,20 @@ const AccountInfo: React.FC = () => {
                     onChange={handleChange}
                     className="h-12 input-focus"
                   />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="planType">Plan Type</Label>
+                  <select
+                    id="planType"
+                    name="planType"
+                    value={formData.planType}
+                    onChange={(e: any) => setFormData(prev => ({ ...prev, planType: e.target.value }))}
+                    className="flex h-12 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 input-focus"
+                  >
+                    <option value="Standard">Standard</option>
+                    <option value="Premium Gold">Premium Gold</option>
+                    <option value="Platinum Elite">Platinum Elite</option>
+                  </select>
                 </div>
               </div>
             ) : (

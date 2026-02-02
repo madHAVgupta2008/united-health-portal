@@ -37,10 +37,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const profile = await getProfile(supabaseUser.id);
       
       if (!profile) {
-        // Create initial profile if it doesn't exist (e.g. if trigger failed or user existed before trigger)
+        // Create initial profile if it doesn't exist
         console.log('Profile missing, creating initial profile for:', supabaseUser.id);
+        
+        // Use metadata from signup if available
+        const metadata = supabaseUser.user_metadata || {};
+        
         const newProfile = await createProfile(supabaseUser.id, {
           email: supabaseUser.email || '',
+          firstName: metadata.firstName || '',
+          lastName: metadata.lastName || '',
+          phone: metadata.phone || '',
         });
         
         return {
@@ -76,9 +83,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Initialize auth state
   useEffect(() => {
     // Supabase mode
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
-        loadUserProfile(session.user).then(setUser);
+        const userProfile = await loadUserProfile(session.user);
+        setUser(userProfile);
       }
       setIsLoading(false);
     });
@@ -136,6 +144,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           data: {
             firstName: userData.firstName || '',
             lastName: userData.lastName || '',
+            phone: userData.phone || '',
           },
         },
       });
@@ -172,7 +181,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (!user) return false;
 
     try {
-      console.log('Attempting to update profile for user:', user.id, 'with data:', updatedData);
       const result = await updateProfileService(user.id, {
         firstName: updatedData.firstName,
         lastName: updatedData.lastName,
@@ -180,10 +188,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         address: updatedData.address,
         dateOfBirth: updatedData.dateOfBirth,
         planType: updatedData.planType,
+        email: updatedData.email,
       });
 
-      console.log('Profile update successful in database:', result.id);
-      setUser({ ...user, ...updatedData });
+      console.log('Profile update successful in database. New data:', result);
+      setUser(result);
       return true;
     } catch (error) {
       console.error('Update user profile error:', error);

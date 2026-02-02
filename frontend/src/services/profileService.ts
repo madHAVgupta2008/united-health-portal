@@ -66,6 +66,7 @@ export const updateProfile = async (
   if (profileData.address !== undefined) updateData.address = profileData.address;
   if (profileData.dateOfBirth !== undefined) updateData.date_of_birth = profileData.dateOfBirth;
   if (profileData.planType !== undefined) updateData.plan_type = profileData.planType;
+  if (profileData.email !== undefined) updateData.email = profileData.email;
 
   console.log('Sending profile update to Supabase:', updateData);
   const { data, error } = await supabase
@@ -107,11 +108,11 @@ export const createProfile = async (
     .insert({
       id: userId,
       email: profileData.email,
-      first_name: profileData.firstName,
-      last_name: profileData.lastName,
-      phone: profileData.phone,
-      address: profileData.address,
-      date_of_birth: profileData.dateOfBirth,
+      first_name: profileData.firstName || null,
+      last_name: profileData.lastName || null,
+      phone: profileData.phone || null,
+      address: profileData.address || null,
+      date_of_birth: profileData.dateOfBirth || null,
       plan_type: profileData.planType || 'Standard',
       member_id: `UH-${new Date().getFullYear()}-${Math.floor(Math.random() * 1000000).toString().padStart(6, '0')}`,
     })
