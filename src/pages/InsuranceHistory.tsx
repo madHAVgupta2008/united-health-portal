@@ -6,20 +6,12 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { InsuranceFile } from '@/types';
 import { cn } from '@/lib/utils';
+import { useDatabase } from '@/contexts/DatabaseContext';
 
 const InsuranceHistory: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
-
-  // Mock data
-  const insuranceFiles: InsuranceFile[] = [
-    { id: '1', fileName: 'Insurance_Card_2024.pdf', fileType: 'Insurance Card', uploadDate: '2024-01-15', status: 'approved', fileSize: '1.2 MB' },
-    { id: '2', fileName: 'Policy_Document.pdf', fileType: 'Policy Document', uploadDate: '2024-01-10', status: 'approved', fileSize: '3.5 MB' },
-    { id: '3', fileName: 'Claim_Form_Dec.pdf', fileType: 'Claim Form', uploadDate: '2024-01-08', status: 'pending', fileSize: '845 KB' },
-    { id: '4', fileName: 'EOB_Statement.pdf', fileType: 'EOB', uploadDate: '2024-01-05', status: 'approved', fileSize: '520 KB' },
-    { id: '5', fileName: 'PreAuth_Request.pdf', fileType: 'Pre-Authorization', uploadDate: '2023-12-28', status: 'rejected', fileSize: '1.8 MB' },
-    { id: '6', fileName: 'Updated_Card.jpg', fileType: 'Insurance Card', uploadDate: '2023-12-20', status: 'approved', fileSize: '2.1 MB' },
-  ];
+  const { insuranceFiles } = useDatabase();
 
   const filteredFiles = insuranceFiles.filter((file) => {
     const matchesSearch = file.fileName.toLowerCase().includes(searchTerm.toLowerCase()) ||

@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import FileUpload from '@/components/ui/FileUpload';
 import { useToast } from '@/hooks/use-toast';
+import { useDatabase } from '@/contexts/DatabaseContext';
 
 const BillUpload: React.FC = () => {
   const { toast } = useToast();
@@ -17,6 +18,8 @@ const BillUpload: React.FC = () => {
     description: '',
   });
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+
+  const { addBill } = useDatabase();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -35,6 +38,13 @@ const BillUpload: React.FC = () => {
       });
       return;
     }
+
+    addBill({
+      hospitalName: formData.hospitalName,
+      billDate: formData.billDate,
+      amount: parseFloat(formData.amount),
+      description: formData.description,
+    });
 
     toast({
       title: 'Bill Submitted',

@@ -7,12 +7,15 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import FileUpload from '@/components/ui/FileUpload';
 import { useToast } from '@/hooks/use-toast';
+import { useDatabase } from '@/contexts/DatabaseContext';
 
 const InsuranceUpload: React.FC = () => {
   const { toast } = useToast();
   const [documentType, setDocumentType] = useState('');
   const [notes, setNotes] = useState('');
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+
+  const { uploadDocument } = useDatabase();
 
   const handleFileSelect = (files: File[]) => {
     setUploadedFiles(files);
@@ -27,6 +30,14 @@ const InsuranceUpload: React.FC = () => {
       });
       return;
     }
+
+    // Process each uploaded file
+    uploadedFiles.forEach(file => {
+      uploadDocument({
+        fileName: file.name,
+        fileType: documentTypes.find(t => t.value === documentType)?.label || 'Document',
+      });
+    });
 
     toast({
       title: 'Documents Submitted',

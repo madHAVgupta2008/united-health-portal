@@ -5,16 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ChatMessage } from '@/types';
 import { cn } from '@/lib/utils';
+import { useDatabase } from '@/contexts/DatabaseContext';
+import { generateAIResponse } from '@/services/ai';
 
 const AIChat: React.FC = () => {
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: '1',
-      content: "Hello! I'm your United Health AI assistant. I can help you with questions about your insurance, bills, claims, and more. How can I assist you today?",
-      sender: 'bot',
-      timestamp: new Date(),
-    },
-  ]);
+  const { chatHistory: messages, addChatMessage } = useDatabase();
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -44,31 +39,15 @@ const AIChat: React.FC = () => {
       timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    addChatMessage(userMessage);
     setInputValue('');
     setIsTyping(true);
 
-    // Simulate AI response (replace with actual AI integration)
-    setTimeout(() => {
-      const botResponses: { [key: string]: string } = {
-        deductible: "Your current deductible is $500 for in-network services and $1,000 for out-of-network services. You've met $320 of your in-network deductible so far this year.",
-        claim: "To file a claim, you can:\n1. Upload your bill in the Hospital Bills section\n2. Our team will process it within 3-5 business days\n3. You'll receive an Explanation of Benefits (EOB) via email\n\nWould you like me to guide you through the upload process?",
-        coverage: "Your Premium Gold plan includes:\n• Preventive care: 100% covered\n• Primary care visits: $25 copay\n• Specialist visits: $50 copay\n• Emergency room: $250 copay\n• Prescription drugs: $10/$30/$60 tiered copays\n\nIs there a specific service you'd like to know about?",
-        status: "I can help you check your claim status! Please provide your claim number, or I can look up your recent claims. Your last submitted claim (#CLM-2024-78542) is currently in processing and should be resolved within 2 business days.",
-      };
+    // Prepare context from recent messages (last 5)
+    const context = messages.slice(-5).map(m => `${m.sender === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n');
 
-      let response = "I understand you're asking about your healthcare. Could you please provide more details so I can assist you better? You can ask about:\n• Insurance coverage\n• Claims and billing\n• Finding providers\n• Understanding your benefits";
-
-      const lowerInput = inputValue.toLowerCase();
-      if (lowerInput.includes('deductible')) {
-        response = botResponses.deductible;
-      } else if (lowerInput.includes('claim') || lowerInput.includes('file')) {
-        response = botResponses.claim;
-      } else if (lowerInput.includes('coverage') || lowerInput.includes('explain')) {
-        response = botResponses.coverage;
-      } else if (lowerInput.includes('status') || lowerInput.includes('check')) {
-        response = botResponses.status;
-      }
+    try {
+      const response = await generateAIResponse(inputValue, context);
 
       const botMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
@@ -77,9 +56,12 @@ const AIChat: React.FC = () => {
         timestamp: new Date(),
       };
 
-      setMessages((prev) => [...prev, botMessage]);
+      addChatMessage(botMessage);
+    } catch (error) {
+      console.error(error);
+    } finally {
       setIsTyping(false);
-    }, 1500);
+    }
   };
 
   const handleQuickQuestion = (question: string) => {

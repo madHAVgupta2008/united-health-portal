@@ -6,20 +6,12 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { HospitalBill } from '@/types';
 import { cn } from '@/lib/utils';
+import { useDatabase } from '@/contexts/DatabaseContext';
 
 const BillHistory: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
-
-  // Mock data
-  const hospitalBills: HospitalBill[] = [
-    { id: '1', hospitalName: 'City General Hospital', billDate: '2024-01-12', amount: 1250.00, status: 'pending', description: 'Emergency Room Visit' },
-    { id: '2', hospitalName: 'Metro Medical Center', billDate: '2024-01-08', amount: 450.00, status: 'paid', description: 'Lab Tests and Consultation' },
-    { id: '3', hospitalName: 'Sunrise Health Clinic', billDate: '2024-01-05', amount: 175.00, status: 'paid', description: 'Annual Checkup' },
-    { id: '4', hospitalName: 'University Hospital', billDate: '2023-12-28', amount: 3200.00, status: 'processing', description: 'Outpatient Surgery' },
-    { id: '5', hospitalName: 'Community Care Center', billDate: '2023-12-20', amount: 85.00, status: 'paid', description: 'Prescription Refill' },
-    { id: '6', hospitalName: 'Regional Medical', billDate: '2023-12-15', amount: 650.00, status: 'denied', description: 'Specialist Consultation' },
-  ];
+  const { bills: hospitalBills } = useDatabase();
 
   const filteredBills = hospitalBills.filter((bill) => {
     const matchesSearch = bill.hospitalName.toLowerCase().includes(searchTerm.toLowerCase()) ||

@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 
 const AccountInfo: React.FC = () => {
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
@@ -24,12 +24,22 @@ const AccountInfo: React.FC = () => {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  const handleSave = () => {
-    setIsEditing(false);
-    toast({
-      title: 'Profile Updated',
-      description: 'Your account information has been saved successfully.',
-    });
+  const handleSave = async () => {
+    const success = await updateUser(formData);
+    
+    if (success) {
+      setIsEditing(false);
+      toast({
+        title: 'Profile Updated',
+        description: 'Your account information has been saved successfully.',
+      });
+    } else {
+      toast({
+        title: 'Update Failed',
+        description: 'Could not update profile. Please try again.',
+        variant: 'destructive',
+      });
+    }
   };
 
   const infoFields = [
