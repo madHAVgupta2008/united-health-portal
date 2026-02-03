@@ -73,23 +73,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const clearError = () => setLastError(null);
 
-  // Enhanced profile loading with retry logic
+  // Enhanced profile loading with retry logic and self-healing
   const loadUserProfile = useCallback(async (
     supabaseUser: SupabaseUser,
     retries: number = 2
   ): Promise<User | null> => {
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
-        const profile = await withTimeout(
+        let profile = await withTimeout(
           getProfile(supabaseUser.id),
           5000,
           'Profile fetch timed out'
         );
 
+        const metadata = supabaseUser.user_metadata || {};
+
         if (!profile) {
           // Create initial profile if it doesn't exist
-          const metadata = supabaseUser.user_metadata || {};
-
           const newProfile = await withTimeout(
             createProfile(supabaseUser.id, {
               email: supabaseUser.email || '',
@@ -112,6 +112,27 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             memberId: newProfile.memberId,
             planType: newProfile.planType,
           };
+        }
+
+        // Self-healing: If profile exists but is missing data that we have in metadata, update it
+        if ((!profile.firstName && metadata.firstName) ||
+          (!profile.lastName && metadata.lastName)) {
+          console.log('Profile missing data, attempting to sync from metadata...');
+          try {
+            const updatedProfile = await updateProfileService(supabaseUser.id, {
+              firstName: metadata.firstName,
+              lastName: metadata.lastName,
+              phone: metadata.phone,
+            });
+
+            // Use the updated profile
+            if (updatedProfile) {
+              profile = updatedProfile;
+            }
+          } catch (updateError) {
+            console.error('Failed to sync profile from metadata:', updateError);
+            // Continue with existing profile rather than failing
+          }
         }
 
         return {
@@ -158,24 +179,30 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         const session = data?.session;
         if (session?.user) {
-          try {
-            const userProfile = await loadUserProfile(session.user);
-            if (userProfile) {
-              setUser(userProfile);
-            } else {
-              // Use basic user if profile fails
+          // Only set user if email is verified
+          if (session.user.email_confirmed_at) {
+            try {
+              const userProfile = await loadUserProfile(session.user);
+              if (userProfile) {
+                setUser(userProfile);
+              } else {
+                // Use basic user if profile fails
+                setUser({
+                  id: session.user.id,
+                  email: session.user.email || '',
+                });
+              }
+            } catch (error) {
+              console.error('Profile load failed during init:', error);
+              // Still set basic user
               setUser({
                 id: session.user.id,
                 email: session.user.email || '',
               });
             }
-          } catch (error) {
-            console.error('Profile load failed during init:', error);
-            // Still set basic user
-            setUser({
-              id: session.user.id,
-              email: session.user.email || '',
-            });
+          } else {
+            // Email not verified, don't set user
+            console.log('Initial session: Email not verified, not setting user');
           }
         }
       } catch (error) {
@@ -189,22 +216,29 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
-        try {
-          const userProfile = await loadUserProfile(session.user);
-          if (userProfile) {
-            setUser(userProfile);
-          } else {
+        // Only set user if email is verified
+        if (session.user.email_confirmed_at) {
+          try {
+            const userProfile = await loadUserProfile(session.user);
+            if (userProfile) {
+              setUser(userProfile);
+            } else {
+              setUser({
+                id: session.user.id,
+                email: session.user.email || '',
+              });
+            }
+          } catch (error) {
+            console.error('Profile load failed in auth change:', error);
             setUser({
               id: session.user.id,
               email: session.user.email || '',
             });
           }
-        } catch (error) {
-          console.error('Profile load failed in auth change:', error);
-          setUser({
-            id: session.user.id,
-            email: session.user.email || '',
-          });
+        } else {
+          // Email not verified, don't set user
+          console.log('Auth state change: Email not verified, not setting user');
+          setUser(null);
         }
       } else {
         setUser(null);
@@ -263,6 +297,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // CRITICAL: Only proceed if we have BOTH a valid user AND session
       // This prevents authentication bypass
       if (data.user && data.session) {
+        // Check if email is verified
+        if (!data.user.email_confirmed_at) {
+          console.log('Email not verified, blocking login');
+
+          // Sign out the user immediately
+          await supabase.auth.signOut();
+
+          const verificationError: AuthError = {
+            type: AuthErrorType.INVALID_CREDENTIALS,
+            message: 'Please verify your email address before logging in. Check your inbox for the verification link.',
+          };
+
+          setLastError(verificationError);
+          return { success: false, error: verificationError };
+        }
+
         // Try to load user profile, but don't block login if it fails
         try {
           const userProfile = await loadUserProfile(data.user);
@@ -379,41 +429,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       if (data.user) {
-        // Try to load user profile, but don't block signup if it fails
-        try {
-          const userProfile = await loadUserProfile(data.user);
+        // Don't set user state - they need to verify email first
+        // Profile will be created by database trigger, but user won't be logged in
+        console.log('Signup successful, user must verify email before login');
 
-          if (userProfile && isMountedRef.current) {
-            setUser(userProfile);
-          } else {
-            // Profile load/creation failed, use basic user data
-            const basicUser: User = {
-              id: data.user.id,
-              email: data.user.email || '',
-              firstName: userData.firstName,
-              lastName: userData.lastName,
-              phone: userData.phone,
-            };
-
-            if (isMountedRef.current) {
-              setUser(basicUser);
-            }
-          }
-        } catch (profileError) {
-          console.error('Profile creation error during signup:', profileError);
-          // Still allow signup with basic user data
-          const basicUser: User = {
-            id: data.user.id,
-            email: data.user.email || '',
-            firstName: userData.firstName,
-            lastName: userData.lastName,
-            phone: userData.phone,
-          };
-
-          if (isMountedRef.current) {
-            setUser(basicUser);
-          }
-        }
+        // Note: We don't set the user state here because email is not verified yet
+        // The user will need to verify their email and then login
 
         return { success: true };
       }

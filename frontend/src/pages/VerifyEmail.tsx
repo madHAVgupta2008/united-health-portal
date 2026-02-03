@@ -7,7 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 const VerifyEmail: React.FC = () => {
     const [isResending, setIsResending] = useState(false);
-    const [verificationStatus, setVerificationStatus] = useState<'pending' | 'success' | 'error'>('pending');
+    const [verificationStatus, setVerificationStatus] = useState<'pending' | 'verifying' | 'success' | 'error'>('pending');
     const [countdown, setCountdown] = useState(0);
     const navigate = useNavigate();
     const location = useLocation();
@@ -28,6 +28,30 @@ const VerifyEmail: React.FC = () => {
     // Check for verification token in URL (when user clicks email link)
     useEffect(() => {
         const handleEmailVerification = async () => {
+            // Check for error parameters in query string (Supabase redirects with errors)
+            const errorParam = searchParams.get('error');
+            const errorCode = searchParams.get('error_code');
+            const errorDescription = searchParams.get('error_description');
+
+            if (errorParam || errorCode) {
+                console.error('Verification error from URL:', { errorParam, errorCode, errorDescription });
+                setVerificationStatus('error');
+
+                let errorMessage = 'The verification link may be invalid or expired.';
+                if (errorCode === 'otp_expired') {
+                    errorMessage = 'The verification link has expired. Please request a new verification email.';
+                } else if (errorDescription) {
+                    errorMessage = errorDescription.replace(/\+/g, ' ');
+                }
+
+                toast({
+                    title: 'Verification failed',
+                    description: errorMessage,
+                    variant: 'destructive',
+                });
+                return;
+            }
+
             // Check if we have a hash in the URL (from email link)
             const hash = window.location.hash;
 
@@ -42,6 +66,9 @@ const VerifyEmail: React.FC = () => {
 
             if (type === 'signup' && accessToken) {
                 try {
+                    // Show verifying state
+                    setVerificationStatus('verifying');
+
                     // Exchange the tokens to verify the email
                     const { data, error } = await supabase.auth.setSession({
                         access_token: accessToken,
@@ -84,7 +111,7 @@ const VerifyEmail: React.FC = () => {
         };
 
         handleEmailVerification();
-    }, [navigate, toast]);
+    }, [navigate, toast, searchParams]);
 
     const handleResendEmail = async () => {
         if (!email) {
@@ -127,6 +154,19 @@ const VerifyEmail: React.FC = () => {
 
     const renderContent = () => {
         switch (verificationStatus) {
+            case 'verifying':
+                return (
+                    <div className="text-center animate-slide-up">
+                        <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-6">
+                            <Loader2 className="w-12 h-12 text-primary animate-spin" />
+                        </div>
+                        <h2 className="text-3xl font-bold text-foreground mb-4">Verifying Your Email</h2>
+                        <p className="text-muted-foreground text-lg mb-6">
+                            Please wait a moment while we verify your email address...
+                        </p>
+                    </div>
+                );
+
             case 'success':
                 return (
                     <div className="text-center animate-slide-up">
