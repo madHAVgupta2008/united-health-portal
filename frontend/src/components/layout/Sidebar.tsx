@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { 
   User, 
@@ -12,6 +12,15 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: Home },
@@ -26,10 +35,15 @@ const navItems = [
 const Sidebar: React.FC = () => {
   const { logout, user } = useAuth();
   const navigate = useNavigate();
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate('/login');
+    } catch (err) {
+      console.error('Logout error:', err);
+    }
   };
 
   return (
@@ -79,13 +93,39 @@ const Sidebar: React.FC = () => {
             <p className="text-xs text-sidebar-foreground/60 truncate">{user?.email}</p>
           </div>
         </div>
-        <button
-          onClick={handleLogout}
-          className="sidebar-item w-full text-destructive hover:bg-destructive/10"
-        >
-          <LogOut className="w-5 h-5" />
-          <span className="font-medium">Logout</span>
-        </button>
+        <>
+          <button
+            onClick={() => setConfirmOpen(true)}
+            className="sidebar-item w-full text-destructive hover:bg-destructive/10"
+          >
+            <LogOut className="w-5 h-5" />
+            <span className="font-medium">Logout</span>
+          </button>
+
+          <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Confirm Logout</DialogTitle>
+                <DialogDescription>Are you sure you want to sign out?</DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setConfirmOpen(false)} size="sm">
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    handleLogout();
+                    setConfirmOpen(false);
+                  }}
+                  size="sm"
+                >
+                  Sign out
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </>
       </div>
     </aside>
   );
