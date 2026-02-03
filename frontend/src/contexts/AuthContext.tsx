@@ -85,11 +85,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           5000,
           'Profile fetch timed out'
         );
-        
+
         if (!profile) {
           // Create initial profile if it doesn't exist
           const metadata = supabaseUser.user_metadata || {};
-          
+
           const newProfile = await withTimeout(
             createProfile(supabaseUser.id, {
               email: supabaseUser.email || '',
@@ -100,7 +100,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             8000,
             'Profile creation timed out'
           );
-          
+
           return {
             id: newProfile.id,
             email: newProfile.email,
@@ -127,18 +127,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         };
       } catch (error) {
         console.error(`Profile load attempt ${attempt + 1} failed:`, error);
-        
+
         // If this was the last retry, return null
         if (attempt === retries) {
           console.error('All profile load attempts failed');
           return null;
         }
-        
+
         // Wait before retrying (exponential backoff)
         await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 500));
       }
     }
-    
+
     return null;
   }, []);
 
@@ -149,13 +149,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       try {
         const { data, error } = await Promise.race([
           supabase.auth.getSession(),
-          new Promise<{ data: { session: null }, error: Error }>((_, reject) => 
+          new Promise<{ data: { session: null }, error: Error }>((_, reject) =>
             setTimeout(() => reject(new Error('Session check timed out')), 10000)
           )
         ]);
 
         if (error) throw error;
-        
+
         const session = data?.session;
         if (session?.user) {
           try {
@@ -218,7 +218,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: AuthError }> => {
     try {
       clearError();
-      
+
       // Add timeout to prevent hanging indefinitely
       const { data, error } = await withTimeout(
         supabase.auth.signInWithPassword({
@@ -231,7 +231,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       if (error) {
         console.error('Login error:', error);
-        
+
         // Determine error type
         let authError: AuthError;
         if (error.message.includes('Invalid login credentials')) {
@@ -255,7 +255,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             message: error.message || 'An unexpected error occurred. Please try again.',
           };
         }
-        
+
         setLastError(authError);
         return { success: false, error: authError };
       }
@@ -266,7 +266,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Try to load user profile, but don't block login if it fails
         try {
           const userProfile = await loadUserProfile(data.user);
-          
+
           if (userProfile && isMountedRef.current) {
             setUser(userProfile);
           } else {
@@ -275,7 +275,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               id: data.user.id,
               email: data.user.email || '',
             };
-            
+
             if (isMountedRef.current) {
               setUser(basicUser);
             }
@@ -287,12 +287,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             id: data.user.id,
             email: data.user.email || '',
           };
-          
+
           if (isMountedRef.current) {
             setUser(basicUser);
           }
         }
-        
+
         return { success: true };
       }
 
@@ -304,37 +304,38 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return { success: false, error: unknownError };
     } catch (error) {
       console.error('Login exception:', error);
-      
+
       const authError: AuthError = {
-        type: error instanceof Error && error.message.includes('timed out') 
-          ? AuthErrorType.TIMEOUT 
+        type: error instanceof Error && error.message.includes('timed out')
+          ? AuthErrorType.TIMEOUT
           : AuthErrorType.NETWORK_ERROR,
         message: error instanceof Error && error.message.includes('timed out')
           ? 'Connection timed out. Please check your internet and try again.'
           : 'Network error. Please check your connection and try again.',
       };
-      
+
       setLastError(authError);
       return { success: false, error: authError };
     }
   };
 
-  const signup = async (userData: { 
-    email: string; 
-    password: string; 
-    firstName?: string; 
+  const signup = async (userData: {
+    email: string;
+    password: string;
+    firstName?: string;
     lastName?: string;
     phone?: string;
   }): Promise<{ success: boolean; error?: AuthError }> => {
     try {
       clearError();
-      
+
       // Add timeout to prevent hanging indefinitely
       const { data, error } = await withTimeout(
         supabase.auth.signUp({
           email: userData.email,
           password: userData.password,
           options: {
+            emailRedirectTo: `${window.location.origin}/verify-email`,
             data: {
               firstName: userData.firstName || '',
               lastName: userData.lastName || '',
@@ -348,7 +349,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       if (error) {
         console.error('Signup error:', error);
-        
+
         // Determine error type
         let authError: AuthError;
         if (error.message.includes('already registered') || error.message.includes('already exists')) {
@@ -372,7 +373,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             message: error.message || 'Signup failed. Please try again.',
           };
         }
-        
+
         setLastError(authError);
         return { success: false, error: authError };
       }
@@ -381,7 +382,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Try to load user profile, but don't block signup if it fails
         try {
           const userProfile = await loadUserProfile(data.user);
-          
+
           if (userProfile && isMountedRef.current) {
             setUser(userProfile);
           } else {
@@ -393,7 +394,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               lastName: userData.lastName,
               phone: userData.phone,
             };
-            
+
             if (isMountedRef.current) {
               setUser(basicUser);
             }
@@ -408,12 +409,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             lastName: userData.lastName,
             phone: userData.phone,
           };
-          
+
           if (isMountedRef.current) {
             setUser(basicUser);
           }
         }
-        
+
         return { success: true };
       }
 
@@ -425,16 +426,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return { success: false, error: unknownError };
     } catch (error) {
       console.error('Signup exception:', error);
-      
+
       const authError: AuthError = {
-        type: error instanceof Error && error.message.includes('timed out') 
-          ? AuthErrorType.TIMEOUT 
+        type: error instanceof Error && error.message.includes('timed out')
+          ? AuthErrorType.TIMEOUT
           : AuthErrorType.NETWORK_ERROR,
         message: error instanceof Error && error.message.includes('timed out')
           ? 'Connection timed out. Please check your internet and try again.'
           : 'Network error. Please check your connection and try again.',
       };
-      
+
       setLastError(authError);
       return { success: false, error: authError };
     }

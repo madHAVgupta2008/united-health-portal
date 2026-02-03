@@ -9,6 +9,8 @@ import { DatabaseProvider } from "@/contexts/DatabaseContext";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
+import VerifyEmail from "./pages/VerifyEmail";
+import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
 import AccountInfo from "./pages/AccountInfo";
 import InsuranceUpload from "./pages/InsuranceUpload";
@@ -26,31 +28,33 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <DatabaseProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<Signup />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            
-            {/* Protected Dashboard Routes */}
-            <Route element={<DashboardLayout />}>
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/account" element={<AccountInfo />} />
-              <Route path="/insurance-upload" element={<InsuranceUpload />} />
-              <Route path="/bill-upload" element={<BillUpload />} />
-              <Route path="/chat" element={<AIChat />} />
-              <Route path="/insurance-history" element={<InsuranceHistory />} />
-              <Route path="/bill-history" element={<BillHistory />} />
-            </Route>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/signup" element={<Signup />} />
+              <Route path="/verify-email" element={<VerifyEmail />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
 
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
+              {/* Protected Dashboard Routes */}
+              <Route element={<DashboardLayout />}>
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/account" element={<AccountInfo />} />
+                <Route path="/insurance-upload" element={<InsuranceUpload />} />
+                <Route path="/bill-upload" element={<BillUpload />} />
+                <Route path="/chat" element={<AIChat />} />
+                <Route path="/insurance-history" element={<InsuranceHistory />} />
+                <Route path="/bill-history" element={<BillHistory />} />
+              </Route>
+
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </TooltipProvider>
       </DatabaseProvider>
     </AuthProvider>
   </QueryClientProvider>

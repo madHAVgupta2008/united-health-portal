@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { 
-  User, 
-  FileText, 
-  Receipt, 
-  MessageCircle, 
-  History, 
+import {
+  User,
+  FileText,
+  Receipt,
+  MessageCircle,
+  History,
   LogOut,
   Shield,
   Home
@@ -38,11 +38,15 @@ const Sidebar: React.FC = () => {
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const handleLogout = async () => {
+    setConfirmOpen(false); // Close dialog first
     try {
       await logout();
-      navigate('/login');
+      // Navigate to login after logout completes
+      navigate('/login', { replace: true });
     } catch (err) {
       console.error('Logout error:', err);
+      // Still navigate to login even if there's an error
+      navigate('/login', { replace: true });
     }
   };
 
@@ -114,10 +118,7 @@ const Sidebar: React.FC = () => {
                 </Button>
                 <Button
                   variant="destructive"
-                  onClick={() => {
-                    handleLogout();
-                    setConfirmOpen(false);
-                  }}
+                  onClick={handleLogout}
                   size="sm"
                 >
                   Sign out

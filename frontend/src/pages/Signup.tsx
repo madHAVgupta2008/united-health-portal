@@ -33,7 +33,7 @@ const Signup: React.FC = () => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
     clearError();
-    
+
     // Clear password error when user types
     if (name === 'password' || name === 'confirmPassword') {
       setPasswordError('');
@@ -45,21 +45,21 @@ const Signup: React.FC = () => {
       setPasswordError('Password must be at least 8 characters long');
       return false;
     }
-    
+
     if (formData.password !== formData.confirmPassword) {
       setPasswordError('Passwords do not match');
       return false;
     }
-    
+
     return true;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Prevent double submission
     if (isSubmitting) return;
-    
+
     // Validate password
     if (!validatePassword()) {
       toast({
@@ -85,9 +85,9 @@ const Signup: React.FC = () => {
       if (result.success) {
         toast({
           title: 'Account created!',
-          description: 'Welcome to United Health Financial Portal.',
+          description: 'Please check your email to verify your account.',
         });
-        navigate('/dashboard');
+        navigate('/verify-email', { state: { email: formData.email } });
       } else {
         toast({
           title: 'Signup failed',
