@@ -22,7 +22,7 @@ const InsuranceUpload: React.FC = () => {
     setUploadedFiles(files);
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (): Promise<void> => {
     if (!documentType || uploadedFiles.length === 0) {
       toast({
         title: 'Missing Information',
@@ -50,11 +50,12 @@ const InsuranceUpload: React.FC = () => {
       setDocumentType('');
       setNotes('');
       setUploadedFiles([]);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Detailed Insurance Upload Error:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
       toast({
         title: 'Upload Failed',
-        description: error.message || 'There was an error uploading your documents. Please check the console for details.',
+        description: errorMessage || 'There was an error uploading your documents. Please check the console for details.',
         variant: 'destructive',
       });
     } finally {
@@ -147,7 +148,7 @@ const InsuranceUpload: React.FC = () => {
             ) : (
               <CheckCircle className="w-5 h-5 mr-2" />
             )}
-            {isLoading ? 'Uploading...' : 'Submit Documents'}
+            {isLoading ? 'Uploading & Analyzing...' : 'Submit Documents'}
           </Button>
         </div>
 

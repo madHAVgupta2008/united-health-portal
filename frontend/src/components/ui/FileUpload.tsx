@@ -30,6 +30,12 @@ const FileUpload: React.FC<FileUploadProps> = ({
     setIsDragging(false);
   }, []);
 
+  const handleFiles = useCallback((files: File[]) => {
+    const validFiles = files.filter((file) => file.size <= maxSize * 1024 * 1024);
+    setUploadedFiles((prev) => [...prev, ...validFiles]);
+    onFileSelect(validFiles);
+  }, [maxSize, onFileSelect]);
+
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
@@ -37,14 +43,8 @@ const FileUpload: React.FC<FileUploadProps> = ({
       const files = Array.from(e.dataTransfer.files);
       handleFiles(files);
     },
-    [onFileSelect]
+    [handleFiles]
   );
-
-  const handleFiles = (files: File[]) => {
-    const validFiles = files.filter((file) => file.size <= maxSize * 1024 * 1024);
-    setUploadedFiles((prev) => [...prev, ...validFiles]);
-    onFileSelect(validFiles);
-  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {

@@ -30,7 +30,7 @@ const BillUpload: React.FC = () => {
     setUploadedFiles(files);
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (): Promise<void> => {
     if (!formData.hospitalName || !formData.billDate || !formData.amount || uploadedFiles.length === 0) {
       toast({
         title: 'Missing Information',
@@ -57,11 +57,12 @@ const BillUpload: React.FC = () => {
       // Reset form
       setFormData({ hospitalName: '', billDate: '', amount: '', description: '' });
       setUploadedFiles([]);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Detailed Bill Upload Error:', error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
       toast({
         title: 'Upload Failed',
-        description: error.message || 'There was an error uploading your bill. Please check the console for details.',
+        description: errorMessage || 'There was an error uploading your bill. Please check the console for details.',
         variant: 'destructive',
       });
     } finally {
@@ -178,7 +179,7 @@ const BillUpload: React.FC = () => {
             ) : (
               <CheckCircle className="w-5 h-5 mr-2" />
             )}
-            {isLoading ? 'Uploading...' : 'Submit Bill'}
+            {isLoading ? 'Processing with AI...' : 'Submit Bill'}
           </Button>
         </div>
 

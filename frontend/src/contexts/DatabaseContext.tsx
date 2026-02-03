@@ -37,7 +37,7 @@ interface DatabaseContextType {
   chatHistory: ChatMessage[];
   isLoading: boolean;
   addBill: (billData: Omit<HospitalBill, 'id' | 'status' | 'fileUrl'>, file?: File) => Promise<void>;
-  uploadDocument: (docData: Omit<InsuranceFile, 'id' | 'uploadDate' | 'status' | 'fileSize'>, file: File) => Promise<void>;
+  uploadDocument: (docData: Omit<InsuranceFile, 'id' | 'uploadDate' | 'status' | 'fileSize' | 'fileUrl'>, file: File) => Promise<void>;
   addChatMessage: (message: ChatMessage) => Promise<void>;
   refreshData: () => Promise<void>;
 }
@@ -52,12 +52,13 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [isLoading, setIsLoading] = useState(true);
 
   // Convert service types to context types
+  // Format file size helper function
   const formatFileSize = useCallback((bytes: number): string => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
   }, []);
 
   const convertBill = useCallback((bill: Bill): HospitalBill => ({
@@ -65,17 +66,19 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
     hospitalName: bill.hospitalName,
     billDate: bill.billDate,
     amount: bill.amount,
-    status: bill.status,
+    status: bill.status as 'pending' | 'paid' | 'processing' | 'denied',
     description: bill.description,
     fileUrl: bill.fileUrl,
   }), []);
 
-  const convertDocument = useCallback((doc: InsuranceDocument): InsuranceFile => ({
+
+
+  const convertInsuranceFile = useCallback((doc: InsuranceDocument): InsuranceFile => ({
     id: doc.id,
     fileName: doc.fileName,
     fileType: doc.fileType,
     uploadDate: doc.uploadDate,
-    status: doc.status,
+    status: doc.status as 'pending' | 'approved' | 'rejected',
     fileSize: formatFileSize(doc.fileSize),
     fileUrl: doc.fileUrl,
   }), [formatFileSize]);
@@ -141,7 +144,7 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
     } finally {
       setIsLoading(false);
     }
-  }, [user, isAuthenticated]);
+  }, [user, isAuthenticated, formatFileSize]);
 
   useEffect(() => {
     loadData();
@@ -188,7 +191,7 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
         },
         file
       );
-      setInsuranceFiles(prev => [convertDocument(newDoc), ...prev]);
+      setInsuranceFiles(prev => [convertInsuranceFile(newDoc), ...prev]);
     } catch (error) {
       console.error('Error uploading document:', error);
       throw error;

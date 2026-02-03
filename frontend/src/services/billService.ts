@@ -161,7 +161,7 @@ export const addBill = async (
         
         if (analysis.isValid && analysis.extractedData) {
           // Update with AI extracted intelligence
-          const updates: any = {
+          const updates: Record<string, string | number> = {
             status: 'pending', // Validated and ready for review
             description: analysis.summary || data.description
           };
@@ -220,17 +220,21 @@ export const addBill = async (
       createdAt: data.created_at,
       updatedAt: data.updated_at,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Add bill error:', error);
+    
+    // Type guard for error messages
+    const errorMessage = error instanceof Error ? error.message : typeof error === 'string' ? error : String(error);
+    
     // Provide user-friendly error messages
-    if (error.message?.includes('timed out')) {
+    if (errorMessage.includes('timed out')) {
       throw new Error('Upload timed out. Please check your connection and try again.');
-    } else if (error.message?.includes('aborted')) {
+    } else if (errorMessage.includes('aborted')) {
       throw new Error('Upload was interrupted. Please try again.');
-    } else if (error.message?.includes('network')) {
+    } else if (errorMessage.includes('network')) {
       throw new Error('Network error. Please check your internet connection.');
     }
-    throw new Error(error.message || 'Failed to upload bill. Please try again.');
+    throw new Error(errorMessage || 'Failed to upload bill. Please try again.');
   }
 };
 

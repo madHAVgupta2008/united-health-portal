@@ -58,7 +58,7 @@ export const updateProfile = async (
   userId: string,
   profileData: Partial<ProfileData>
 ): Promise<Profile> => {
-  const updateData: any = {};
+  const updateData: Record<string, string | null | number> = {};
 
   if (profileData.firstName !== undefined) updateData.first_name = profileData.firstName;
   if (profileData.lastName !== undefined) updateData.last_name = profileData.lastName;

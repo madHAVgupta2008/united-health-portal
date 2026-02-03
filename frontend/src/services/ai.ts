@@ -1,11 +1,11 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, GenerativeModel, Content } from '@google/generative-ai';
 
 // Initialize the API with key from environment variables
 // Note: In a production app, this should be proxied through a backend to protect the key
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || 'AIzaSyBQjVtdAM7JHPRT2bxplrRrm92vkID1-9I';
+const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
 
 let genAI: GoogleGenerativeAI | null = null;
-let model: any = null;
+let model: GenerativeModel | null = null;
 
 if (API_KEY) {
   genAI = new GoogleGenerativeAI(API_KEY);
@@ -141,15 +141,15 @@ export const generateAIResponse = async (userMessage: string, chatHistory: strin
     const fullPrompt = `${SYSTEM_PROMPT}\n\nChat History:\n${chatHistory}\n\nUser: ${userMessage}\nAssistant:`;
     
     // Wrap AI call with timeout (15 seconds)
-    const result = await Promise.race([
+    const result: Awaited<ReturnType<typeof model.generateContent>> = await Promise.race([
       model.generateContent(fullPrompt),
-      new Promise((_, reject) =>
+      new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('AI response timed out')), 15000)
       )
     ]);
     
-    const response = await result.response;
-    const text = response.text();
+    const aiResponse = await result.response;
+    const text = aiResponse.text();
     
     // Validate response
     if (!text || text.trim().length === 0) {
@@ -157,8 +157,11 @@ export const generateAIResponse = async (userMessage: string, chatHistory: strin
     }
     
     return text;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Gemini API Error:", error);
+    
+    // Type guard for error messages
+    const errorMessage = error instanceof Error ? error.message : String(error);
     
     // Instead of showing errors, fall back to intelligent mock responses
     // This provides better UX when API is unavailable
@@ -172,9 +175,9 @@ export const generateAIResponse = async (userMessage: string, chatHistory: strin
     if (lowerInput.includes('hello') || lowerInput.includes('hi') || lowerInput.includes('hey')) return mockResponses.greeting;
     
     // If no match, provide a helpful fallback based on error type
-    if (error.message?.includes('quota') || error.message?.includes('429')) {
+    if (errorMessage.includes('quota') || errorMessage.includes('429')) {
       return "I'm currently running in limited mode. I can still help with basic questions about deductibles, claims, coverage, and claim status. What would you like to know?";
-    } else if (error.message?.includes('API key') || error.message?.includes('401') || error.message?.includes('403')) {
+    } else if (errorMessage.includes('API key') || errorMessage.includes('401') || errorMessage.includes('403')) {
       return "I'm running in demo mode right now. I can help answer questions about:\n• Your deductible and coverage\n• How to file a claim\n• Checking claim status\n\nWhat would you like to know?";
     }
     

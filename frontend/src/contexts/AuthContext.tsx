@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { User as SupabaseUser } from '@supabase/supabase-js';
 import { getProfile, updateProfile as updateProfileService, createProfile } from '@/services/profileService';
@@ -74,7 +74,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const clearError = () => setLastError(null);
 
   // Enhanced profile loading with retry logic
-  const loadUserProfile = async (
+  const loadUserProfile = useCallback(async (
     supabaseUser: SupabaseUser,
     retries: number = 2
   ): Promise<User | null> => {
@@ -140,7 +140,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
     
     return null;
-  };
+  }, []);
 
   // Initialize auth state
   useEffect(() => {
@@ -149,7 +149,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       try {
         const { data, error } = await Promise.race([
           supabase.auth.getSession(),
-          new Promise<{ data: { session: any }, error: any }>((_, reject) => 
+          new Promise<{ data: { session: null }, error: Error }>((_, reject) => 
             setTimeout(() => reject(new Error('Session check timed out')), 10000)
           )
         ]);
@@ -158,8 +158,25 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         
         const session = data?.session;
         if (session?.user) {
-          const userProfile = await loadUserProfile(session.user);
-          setUser(userProfile);
+          try {
+            const userProfile = await loadUserProfile(session.user);
+            if (userProfile) {
+              setUser(userProfile);
+            } else {
+              // Use basic user if profile fails
+              setUser({
+                id: session.user.id,
+                email: session.user.email || '',
+              });
+            }
+          } catch (error) {
+            console.error('Profile load failed during init:', error);
+            // Still set basic user
+            setUser({
+              id: session.user.id,
+              email: session.user.email || '',
+            });
+          }
         }
       } catch (error) {
         console.error('Error initializing session:', error);
@@ -172,10 +189,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
-        // Only load profile if we don't have it or if it's a different user
-        // optimization to prevent unnecessary calls
-        const userProfile = await loadUserProfile(session.user);
-        setUser(userProfile);
+        try {
+          const userProfile = await loadUserProfile(session.user);
+          if (userProfile) {
+            setUser(userProfile);
+          } else {
+            setUser({
+              id: session.user.id,
+              email: session.user.email || '',
+            });
+          }
+        } catch (error) {
+          console.error('Profile load failed in auth change:', error);
+          setUser({
+            id: session.user.id,
+            email: session.user.email || '',
+          });
+        }
       } else {
         setUser(null);
       }
@@ -183,8 +213,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     return () => subscription.unsubscribe();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loadUserProfile, isMountedRef]);
 
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: AuthError }> => {
     try {
@@ -234,16 +263,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // CRITICAL: Only proceed if we have BOTH a valid user AND session
       // This prevents authentication bypass
       if (data.user && data.session) {
-        // Load user profile before setting authenticated state
-        // This prevents premature redirect
-        const userProfile = await loadUserProfile(data.user);
-        
-        if (userProfile && isMountedRef.current) {
-          setUser(userProfile);
-          return { success: true };
-        } else {
-          // Profile load failed, but we have valid auth
-          // Set basic user data as fallback
+        // Try to load user profile, but don't block login if it fails
+        try {
+          const userProfile = await loadUserProfile(data.user);
+          
+          if (userProfile && isMountedRef.current) {
+            setUser(userProfile);
+          } else {
+            // Profile load failed, use basic user data
+            const basicUser: User = {
+              id: data.user.id,
+              email: data.user.email || '',
+            };
+            
+            if (isMountedRef.current) {
+              setUser(basicUser);
+            }
+          }
+        } catch (profileError) {
+          console.error('Profile load error during login:', profileError);
+          // Still allow login with basic user data
           const basicUser: User = {
             id: data.user.id,
             email: data.user.email || '',
@@ -252,8 +291,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           if (isMountedRef.current) {
             setUser(basicUser);
           }
-          return { success: true };
         }
+        
+        return { success: true };
       }
 
       const unknownError: AuthError = {
@@ -338,15 +378,29 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       if (data.user) {
-        // Load user profile before setting authenticated state
-        // This ensures consistent behavior with login
-        const userProfile = await loadUserProfile(data.user);
-        
-        if (userProfile && isMountedRef.current) {
-          setUser(userProfile);
-          return { success: true };
-        } else {
-          // Profile load/creation failed, set basic user data as fallback
+        // Try to load user profile, but don't block signup if it fails
+        try {
+          const userProfile = await loadUserProfile(data.user);
+          
+          if (userProfile && isMountedRef.current) {
+            setUser(userProfile);
+          } else {
+            // Profile load/creation failed, use basic user data
+            const basicUser: User = {
+              id: data.user.id,
+              email: data.user.email || '',
+              firstName: userData.firstName,
+              lastName: userData.lastName,
+              phone: userData.phone,
+            };
+            
+            if (isMountedRef.current) {
+              setUser(basicUser);
+            }
+          }
+        } catch (profileError) {
+          console.error('Profile creation error during signup:', profileError);
+          // Still allow signup with basic user data
           const basicUser: User = {
             id: data.user.id,
             email: data.user.email || '',
@@ -358,8 +412,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           if (isMountedRef.current) {
             setUser(basicUser);
           }
-          return { success: true };
         }
+        
+        return { success: true };
       }
 
       const unknownError: AuthError = {

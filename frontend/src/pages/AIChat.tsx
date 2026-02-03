@@ -29,12 +29,30 @@ const AIChat: React.FC = () => {
     "Check claim status",
   ];
 
-  const handleSend = async () => {
-    if (!inputValue.trim()) return;
+  const handleQuickQuestion = (question: string) => {
+    setInputValue(question);
+    // Auto-send the question for better UX
+    setTimeout(() => {
+      // We need to use the ref or a direct call, but since state update is async, 
+      // we'll just manually trigger the send logic with the specific text
+      const event = { preventDefault: () => {} } as React.FormEvent;
+      // This is a bit hacky, cleaner way is to separate send logic
+      // But for now let's just update state and let user click or 
+      // safer: refactor handleSend to accept an optional argument
+      handleSend(question); 
+    }, 0);
+  };
+  
+  // Refactored handleSend to accept optional message
+  const handleSend = async (messageOverride?: string) => {
+    const textToSend = messageOverride || inputValue;
+    if (!textToSend.trim() || isTyping) return;
 
+    if (!messageOverride) setInputValue(''); // Clear input if typed manually
+    
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
-      content: inputValue,
+      content: textToSend,
       sender: 'user',
       timestamp: new Date(),
     };
@@ -42,14 +60,13 @@ const AIChat: React.FC = () => {
     try {
       // Add user message
       await addChatMessage(userMessage);
-      setInputValue('');
       setIsTyping(true);
 
       // Prepare context from recent messages (last 5)
       const context = messages.slice(-5).map(m => `${m.sender === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n');
 
       try {
-        const response = await generateAIResponse(inputValue, context);
+        const response = await generateAIResponse(textToSend, context);
 
         const botMessage: ChatMessage = {
           id: (Date.now() + 1).toString(),
@@ -74,15 +91,11 @@ const AIChat: React.FC = () => {
       console.error('Chat error:', error);
       // If we couldn't save the user message, show an error
       alert('Failed to send message. Please check your connection and try again.');
-      // Restore the input
-      setInputValue(userMessage.content);
+      // Restore the input if it was typed
+      if (!messageOverride) setInputValue(textToSend);
     } finally {
       setIsTyping(false);
     }
-  };
-
-  const handleQuickQuestion = (question: string) => {
-    setInputValue(question);
   };
 
   return (
@@ -188,10 +201,11 @@ const AIChat: React.FC = () => {
                 <Input
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
-                  placeholder="Type your question..."
+                  placeholder={isTyping ? "Assistant is typing..." : "Type your question..."}
                   className="flex-1 h-12 input-focus"
+                  disabled={isTyping}
                 />
-                <Button type="submit" className="h-12 px-6 btn-primary" disabled={!inputValue.trim()}>
+                <Button type="submit" className="h-12 px-6 btn-primary" disabled={!inputValue.trim() || isTyping}>
                   <Send className="w-5 h-5" />
                 </Button>
               </form>
