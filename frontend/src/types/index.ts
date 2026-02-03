@@ -17,6 +17,7 @@ export interface InsuranceFile {
   uploadDate: string;
   status: 'pending' | 'approved' | 'rejected';
   fileSize: string;
+  fileUrl: string;
 }
 
 export interface HospitalBill {
@@ -26,6 +27,7 @@ export interface HospitalBill {
   amount: number;
   status: 'pending' | 'paid' | 'processing' | 'denied';
   description: string;
+  fileUrl?: string;
 }
 
 export interface ChatMessage {

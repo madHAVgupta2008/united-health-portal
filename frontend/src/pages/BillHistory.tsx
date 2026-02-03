@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { HospitalBill } from '@/types';
 import { cn } from '@/lib/utils';
 import { useDatabase } from '@/contexts/DatabaseContext';
+import { supabase } from '@/integrations/supabase/client';
 
 const BillHistory: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -59,6 +60,52 @@ const BillHistory: React.FC = () => {
     { label: 'Pending', value: `$${pendingAmount.toLocaleString()}`, color: 'bg-warning/10 text-warning', icon: Clock },
     { label: 'Total Records', value: hospitalBills.length, color: 'bg-accent/10 text-accent', icon: CreditCard },
   ];
+
+  const handleFileAction = async (url: string | undefined, fileName: string | undefined, action: 'view' | 'download') => {
+    if (!url) {
+      alert('No file available for this bill.');
+      return;
+    }
+
+    try {
+      let finalUrl = url;
+
+      // Check if it's a Supabase storage URL for hospital-bills
+      if (url.includes('supabase.co') && url.includes('hospital-bills')) {
+        // Extract path and remove any existing query parameters
+        const path = url.split('hospital-bills/')[1]?.split('?')[0];
+        if (path) {
+          const decodedPath = decodeURIComponent(path);
+          const { data, error } = await supabase.storage
+            .from('hospital-bills')
+            .createSignedUrl(decodedPath, 3600, {
+              download: action === 'download' ? true : false,
+            }); // 1 hour expiry
+            
+          if (!error && data?.signedUrl) {
+            finalUrl = data.signedUrl;
+          } else {
+            console.error('Error creating signed URL:', error);
+          }
+        }
+      }
+      
+      if (action === 'download') {
+        // Create a temporary anchor element to trigger the download
+        const link = document.createElement('a');
+        link.href = finalUrl;
+        link.setAttribute('download', fileName || 'bill');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } else {
+        window.open(finalUrl, '_blank');
+      }
+    } catch (error) {
+      console.error('Error handling file action:', error);
+      window.open(url, '_blank');
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -157,10 +204,18 @@ const BillHistory: React.FC = () => {
                     {getStatusIcon(bill.status)}
                     {bill.status.charAt(0).toUpperCase() + bill.status.slice(1)}
                   </Badge>
-                  <Button variant="ghost" size="icon">
+                  <Button 
+                    variant="ghost" 
+                    size="icon"
+                    onClick={() => handleFileAction(bill.fileUrl, bill.hospitalName, 'view')}
+                  >
                     <Eye className="w-5 h-5" />
                   </Button>
-                  <Button variant="ghost" size="icon">
+                   <Button 
+                    variant="ghost" 
+                    size="icon"
+                    onClick={() => handleFileAction(bill.fileUrl, bill.hospitalName, 'download')}
+                  >
                     <Download className="w-5 h-5" />
                   </Button>
                 </div>

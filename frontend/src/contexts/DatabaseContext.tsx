@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { useAuth } from './AuthContext';
 import { getBills, addBill as addBillService, Bill } from '@/services/billService';
 import { getDocuments, uploadDocument as uploadDocumentService, InsuranceDocument } from '@/services/insuranceService';
@@ -21,6 +21,7 @@ interface InsuranceFile {
   uploadDate: string;
   status: 'pending' | 'approved' | 'rejected';
   fileSize: string;
+  fileUrl: string;
 }
 
 interface ChatMessage {
@@ -51,7 +52,15 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
   const [isLoading, setIsLoading] = useState(true);
 
   // Convert service types to context types
-  const convertBill = (bill: Bill): HospitalBill => ({
+  const formatFileSize = useCallback((bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+  }, []);
+
+  const convertBill = useCallback((bill: Bill): HospitalBill => ({
     id: bill.id,
     hospitalName: bill.hospitalName,
     billDate: bill.billDate,
@@ -59,34 +68,27 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
     status: bill.status,
     description: bill.description,
     fileUrl: bill.fileUrl,
-  });
+  }), []);
 
-  const convertDocument = (doc: InsuranceDocument): InsuranceFile => ({
+  const convertDocument = useCallback((doc: InsuranceDocument): InsuranceFile => ({
     id: doc.id,
     fileName: doc.fileName,
     fileType: doc.fileType,
     uploadDate: doc.uploadDate,
     status: doc.status,
     fileSize: formatFileSize(doc.fileSize),
-  });
+    fileUrl: doc.fileUrl,
+  }), [formatFileSize]);
 
-  const convertChatMessage = (msg: ChatMsg): ChatMessage => ({
+  const convertChatMessage = useCallback((msg: ChatMsg): ChatMessage => ({
     id: msg.id,
     content: msg.content,
     sender: msg.sender,
     timestamp: new Date(msg.createdAt),
-  });
-
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
-  };
+  }), []);
 
   // Load data when user is authenticated
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!user || !isAuthenticated) {
       setBills([]);
       setInsuranceFiles([]);
@@ -105,19 +107,45 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
         getChatHistory(user.id),
       ]);
 
-      setBills(billsData.map(convertBill));
-      setInsuranceFiles(docsData.map(convertDocument));
-      setChatHistory(chatData.map(convertChatMessage));
+      // Convert bills inline
+      setBills(billsData.map(bill => ({
+        id: bill.id,
+        hospitalName: bill.hospitalName,
+        billDate: bill.billDate,
+        amount: bill.amount,
+        status: bill.status,
+        description: bill.description,
+        fileUrl: bill.fileUrl,
+      })));
+
+      // Convert documents inline
+      setInsuranceFiles(docsData.map(doc => ({
+        id: doc.id,
+        fileName: doc.fileName,
+        fileType: doc.fileType,
+        uploadDate: doc.uploadDate,
+        status: doc.status,
+        fileSize: formatFileSize(doc.fileSize),
+        fileUrl: doc.fileUrl,
+      })));
+
+      // Convert chat messages inline
+      setChatHistory(chatData.map(msg => ({
+        id: msg.id,
+        content: msg.content,
+        sender: msg.sender,
+        timestamp: new Date(msg.createdAt),
+      })));
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user, isAuthenticated]);
 
   useEffect(() => {
     loadData();
-  }, [user, isAuthenticated]);
+  }, [loadData]);
 
   const addBill = async (
     billData: Omit<HospitalBill, 'id' | 'status' | 'fileUrl'>,

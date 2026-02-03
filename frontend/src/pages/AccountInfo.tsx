@@ -11,6 +11,7 @@ const AccountInfo: React.FC = () => {
   const { user, updateUser } = useAuth();
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState({
     firstName: user?.firstName || '',
     lastName: user?.lastName || '',
@@ -41,21 +42,32 @@ const AccountInfo: React.FC = () => {
   };
 
   const handleSave = async () => {
-    console.log('handleSave called in AccountInfo with:', formData);
-    const success = await updateUser(formData);
-    
-    if (success) {
-      setIsEditing(false);
+    setIsSaving(true);
+    try {
+      const success = await updateUser(formData);
+      
+      if (success) {
+        setIsEditing(false);
+        toast({
+          title: 'Profile Updated',
+          description: 'Your account information has been saved successfully.',
+        });
+      } else {
+        toast({
+          title: 'Update Failed',
+          description: 'Could not update profile. Please try again.',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      console.error('Error in handleSave:', error);
       toast({
-        title: 'Profile Updated',
-        description: 'Your account information has been saved successfully.',
-      });
-    } else {
-      toast({
-        title: 'Update Failed',
-        description: 'Could not update profile. Please try again.',
+        title: 'Update Error',
+        description: 'An unexpected error occurred.',
         variant: 'destructive',
       });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -78,11 +90,16 @@ const AccountInfo: React.FC = () => {
           onClick={() => (isEditing ? handleSave() : setIsEditing(true))}
           className={isEditing ? 'btn-primary' : ''}
           variant={isEditing ? 'default' : 'outline'}
+          disabled={isSaving}
         >
           {isEditing ? (
             <>
-              <Save className="w-4 h-4 mr-2" />
-              Save Changes
+              {isSaving ? (
+                <div className="w-4 h-4 mr-2 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+              ) : (
+                <Save className="w-4 h-4 mr-2" />
+              )}
+              {isSaving ? 'Saving...' : 'Save Changes'}
             </>
           ) : (
             <>
@@ -190,7 +207,7 @@ const AccountInfo: React.FC = () => {
                     id="planType"
                     name="planType"
                     value={formData.planType}
-                    onChange={(e: any) => setFormData(prev => ({ ...prev, planType: e.target.value }))}
+                    onChange={(e) => setFormData(prev => ({ ...prev, planType: e.target.value }))}
                     className="flex h-12 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 input-focus"
                   >
                     <option value="Standard">Standard</option>

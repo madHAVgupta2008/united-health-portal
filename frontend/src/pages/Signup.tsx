@@ -18,30 +18,63 @@ const Signup: React.FC = () => {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const { signup } = useAuth();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
+  const { signup, clearError } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  // Clear errors when component unmounts
+  React.useEffect(() => {
+    return () => clearError();
+  }, [clearError]);
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+    clearError();
+    
+    // Clear password error when user types
+    if (name === 'password' || name === 'confirmPassword') {
+      setPasswordError('');
+    }
+  };
+
+  const validatePassword = (): boolean => {
+    if (formData.password.length < 8) {
+      setPasswordError('Password must be at least 8 characters long');
+      return false;
+    }
+    
+    if (formData.password !== formData.confirmPassword) {
+      setPasswordError('Passwords do not match');
+      return false;
+    }
+    
+    return true;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (formData.password !== formData.confirmPassword) {
+    // Prevent double submission
+    if (isSubmitting) return;
+    
+    // Validate password
+    if (!validatePassword()) {
       toast({
-        title: 'Passwords do not match',
-        description: 'Please make sure your passwords match.',
+        title: 'Validation Error',
+        description: passwordError,
         variant: 'destructive',
       });
       return;
     }
 
     setIsLoading(true);
+    setIsSubmitting(true);
 
     try {
-      const success = await signup({
+      const result = await signup({
         email: formData.email,
         password: formData.password,
         firstName: formData.firstName,
@@ -49,7 +82,7 @@ const Signup: React.FC = () => {
         phone: formData.phone,
       });
 
-      if (success) {
+      if (result.success) {
         toast({
           title: 'Account created!',
           description: 'Welcome to United Health Financial Portal.',
@@ -58,18 +91,19 @@ const Signup: React.FC = () => {
       } else {
         toast({
           title: 'Signup failed',
-          description: 'Please try again.',
+          description: result.error?.message || 'Please try again.',
           variant: 'destructive',
         });
       }
     } catch (error) {
       toast({
         title: 'Error',
-        description: 'An error occurred. Please try again.',
+        description: 'An unexpected error occurred. Please try again.',
         variant: 'destructive',
       });
     } finally {
       setIsLoading(false);
+      setTimeout(() => setIsSubmitting(false), 500);
     }
   };
 
@@ -149,6 +183,7 @@ const Signup: React.FC = () => {
                     value={formData.firstName}
                     onChange={handleChange}
                     className="pl-10 h-12 input-focus"
+                    disabled={isLoading}
                     required
                   />
                 </div>
@@ -162,6 +197,7 @@ const Signup: React.FC = () => {
                   value={formData.lastName}
                   onChange={handleChange}
                   className="h-12 input-focus"
+                  disabled={isLoading}
                   required
                 />
               </div>
@@ -179,6 +215,7 @@ const Signup: React.FC = () => {
                   value={formData.email}
                   onChange={handleChange}
                   className="pl-10 h-12 input-focus"
+                  disabled={isLoading}
                   required
                 />
               </div>
@@ -196,6 +233,7 @@ const Signup: React.FC = () => {
                   value={formData.phone}
                   onChange={handleChange}
                   className="pl-10 h-12 input-focus"
+                  disabled={isLoading}
                 />
               </div>
             </div>
@@ -212,6 +250,7 @@ const Signup: React.FC = () => {
                   value={formData.password}
                   onChange={handleChange}
                   className="pl-10 pr-10 h-12 input-focus"
+                  disabled={isLoading}
                   required
                   minLength={8}
                 />
@@ -219,10 +258,17 @@ const Signup: React.FC = () => {
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  disabled={isLoading}
                 >
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
+              {passwordError && formData.password && (
+                <p className="text-sm text-destructive mt-1">{passwordError}</p>
+              )}
+              {formData.password && !passwordError && formData.password.length >= 8 && (
+                <p className="text-sm text-green-600 mt-1">✓ Password strength: Good</p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -237,6 +283,7 @@ const Signup: React.FC = () => {
                   value={formData.confirmPassword}
                   onChange={handleChange}
                   className="pl-10 h-12 input-focus"
+                  disabled={isLoading}
                   required
                 />
               </div>

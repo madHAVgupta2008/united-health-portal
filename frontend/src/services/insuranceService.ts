@@ -1,5 +1,38 @@
 import { supabase } from '@/integrations/supabase/client';
 
+// Helper function to wrap promises with timeout
+function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  errorMessage: string = 'Operation timed out'
+): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(errorMessage)), timeoutMs)
+    ),
+  ]);
+}
+
+// Helper function for retry logic with exponential backoff
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  retries: number = 3,
+  delay: number = 1000
+): Promise<T> {
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (attempt === retries - 1) throw error;
+      console.warn(`Attempt ${attempt + 1} failed, retrying in ${delay}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      delay *= 2; // Exponential backoff
+    }
+  }
+  throw new Error('All retry attempts failed');
+}
+
 export interface DocumentData {
   fileName: string;
   fileType: string;
@@ -46,61 +79,135 @@ export const getDocuments = async (userId: string): Promise<InsuranceDocument[]>
 };
 
 /**
- * Upload an insurance document
+ * Upload an insurance document with timeout and retry protection
  */
 export const uploadDocument = async (
   userId: string,
   docData: DocumentData,
   file: File
 ): Promise<InsuranceDocument> => {
-  // Upload file to storage
-  const fileExt = file.name.split('.').pop();
-  const fileName = `${userId}/${Date.now()}.${fileExt}`;
+  try {
+    // Upload file to storage with timeout and retry
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${userId}/${Date.now()}.${fileExt}`;
 
-  const { error: uploadError } = await supabase.storage
-    .from('insurance-documents')
-    .upload(fileName, file);
+    // Wrap upload with timeout (30 seconds) and retry logic
+    await withRetry(
+      () => withTimeout(
+        supabase.storage
+          .from('insurance-documents')
+          .upload(fileName, file)
+          .then(result => {
+            if (result.error) throw result.error;
+            return result;
+          }),
+        30000,
+        'File upload timed out after 30 seconds'
+      ),
+      3, // 3 retry attempts
+      1000 // Start with 1 second delay
+    );
 
-  if (uploadError) {
-    console.error('Error uploading document:', uploadError);
-    throw uploadError;
+    // Get public URL
+    const { data: urlData } = supabase.storage
+      .from('insurance-documents')
+      .getPublicUrl(fileName);
+
+    // Insert document record with timeout
+    const insertResult = await withTimeout(
+      (async () => {
+        const result = await supabase
+          .from('insurance_documents')
+          .insert({
+            user_id: userId,
+            file_name: docData.fileName,
+            file_type: docData.fileType,
+            file_url: urlData.publicUrl,
+            file_size: file.size,
+            status: 'pending' 
+          })
+          .select()
+          .single();
+        return result;
+      })(),
+      10000,
+      'Database insert timed out'
+    );
+
+    const { data, error } = insertResult;
+
+    if (error) {
+      console.error('Error adding document record to database:', error);
+      throw error;
+    }
+
+    // AI Analysis Integration (non-blocking)
+    try {
+      const { analyzeDocument } = await import('./ai');
+      const analysis = await withTimeout(
+        analyzeDocument(file),
+        20000,
+        'AI analysis timed out'
+      );
+      
+      if (analysis.isValid) {
+        // Auto-approve valid insurance docs
+        const { data: updatedData } = await supabase
+          .from('insurance_documents')
+          .update({ status: 'approved' })
+          .eq('id', data.id)
+          .select()
+          .single();
+          
+        if (updatedData) {
+          return {
+            id: updatedData.id,
+            userId: updatedData.user_id,
+            fileName: updatedData.file_name,
+            fileType: updatedData.file_type,
+            fileUrl: updatedData.file_url,
+            fileSize: updatedData.file_size,
+            uploadDate: updatedData.upload_date,
+            status: updatedData.status,
+            createdAt: updatedData.created_at,
+            updatedAt: updatedData.updated_at,
+          };
+        }
+      } else {
+        await supabase
+          .from('insurance_documents')
+          .update({ status: 'rejected' })
+          .eq('id', data.id);
+      }
+    } catch (aiError) {
+      console.error('AI Analysis failed, document uploaded successfully:', aiError);
+      // Continue with original data even if AI fails
+    }
+
+    return {
+      id: data.id,
+      userId: data.user_id,
+      fileName: data.file_name,
+      fileType: data.file_type,
+      fileUrl: data.file_url,
+      fileSize: data.file_size,
+      uploadDate: data.upload_date,
+      status: data.status,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+    };
+  } catch (error: any) {
+    console.error('Upload document error:', error);
+    // Provide user-friendly error messages
+    if (error.message?.includes('timed out')) {
+      throw new Error('Upload timed out. Please check your connection and try again.');
+    } else if (error.message?.includes('aborted')) {
+      throw new Error('Upload was interrupted. Please try again.');
+    } else if (error.message?.includes('network')) {
+      throw new Error('Network error. Please check your internet connection.');
+    }
+    throw new Error(error.message || 'Failed to upload document. Please try again.');
   }
-
-  // Get public URL
-  const { data: urlData } = supabase.storage
-    .from('insurance-documents')
-    .getPublicUrl(fileName);
-
-  // Insert document record
-  const { data, error } = await supabase
-    .from('insurance_documents')
-    .insert({
-      user_id: userId,
-      file_name: docData.fileName,
-      file_type: docData.fileType,
-      file_url: urlData.publicUrl,
-      file_size: file.size,
-    })
-    .select()
-    .single();
-
-  if (error) {
-    console.error('Error adding document record to database:', error);
-    throw error;
-  }
-
-  return {
-    id: data.id,
-    userId: data.user_id,
-    fileName: data.file_name,
-    fileType: data.file_type,
-    fileUrl: data.file_url,
-    fileSize: data.file_size,
-    uploadDate: data.upload_date,
-    status: data.status,
-    createdAt: data.created_at,
-    updatedAt: data.updated_at,
-  };
 };
 
 /**
@@ -139,9 +246,9 @@ export const deleteDocument = async (docId: string): Promise<void> => {
 
   // Delete file from storage
   if (doc?.file_url) {
-    const fileName = doc.file_url.split('/').pop();
-    if (fileName) {
-      await supabase.storage.from('insurance-documents').remove([fileName]);
+    const path = doc.file_url.split('insurance-documents/')[1];
+    if (path) {
+      await supabase.storage.from('insurance-documents').remove([path]);
     }
   }
 

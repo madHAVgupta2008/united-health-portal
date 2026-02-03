@@ -12,11 +12,42 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useDatabase } from '@/contexts/DatabaseContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
+  const { bills, insuranceFiles } = useDatabase();
+
+  const activeClaims = insuranceFiles.filter(f => f.status === 'pending').length;
+  
+  const pendingBills = bills
+    .filter(b => b.status === 'pending')
+    .reduce((sum, bill) => sum + bill.amount, 0);
+
+  // Generate recent activity from real data
+  const recentActivity = [
+    ...insuranceFiles.map(f => ({
+      type: 'insurance',
+      text: f.fileName,
+      date: new Date(f.uploadDate),
+      status: f.status === 'approved' ? 'success' : f.status === 'rejected' ? 'error' : 'pending'
+    })),
+    ...bills.map(b => ({
+      type: 'bill',
+      text: `Bill for ${b.hospitalName}`,
+      date: new Date(b.billDate),
+      status: b.status === 'paid' ? 'success' : 'pending'
+    }))
+  ]
+  .sort((a, b) => b.date.getTime() - a.date.getTime())
+  .slice(0, 4)
+  .map(item => ({
+    ...item,
+    date: item.date.toLocaleDateString(),
+    displayStatus: item.status // map to UI status
+  }));
 
   const quickActions = [
     {
@@ -49,20 +80,13 @@ const Dashboard: React.FC = () => {
     },
   ];
 
-  const recentActivity = [
-    { type: 'insurance', text: 'Insurance card uploaded', date: '2 hours ago', status: 'success' },
-    { type: 'bill', text: 'Hospital bill submitted', date: '1 day ago', status: 'pending' },
-    { type: 'insurance', text: 'Claim #12345 approved', date: '3 days ago', status: 'success' },
-    { type: 'bill', text: 'Payment processed', date: '5 days ago', status: 'success' },
-  ];
-
   return (
     <div className="space-y-8">
       {/* Welcome Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground">
-            Welcome back, {user?.firstName}!
+            Welcome back, {user?.firstName || 'User'}!
           </h1>
           <p className="text-muted-foreground mt-1">
             Here's an overview of your healthcare finances
@@ -71,7 +95,7 @@ const Dashboard: React.FC = () => {
         <div className="flex items-center gap-4">
           <div className="text-right">
             <p className="text-sm text-muted-foreground">Member ID</p>
-            <p className="font-semibold text-foreground">{user?.memberId}</p>
+            <p className="font-semibold text-foreground">{user?.memberId || 'N/A'}</p>
           </div>
           <div className="w-12 h-12 rounded-xl gradient-primary flex items-center justify-center">
             <Shield className="w-6 h-6 text-primary-foreground" />
@@ -86,7 +110,7 @@ const Dashboard: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Plan Type</p>
-                <p className="text-2xl font-bold text-foreground mt-1">{user?.planType}</p>
+                <p className="text-2xl font-bold text-foreground mt-1">{user?.planType || 'Standard'}</p>
               </div>
               <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
                 <Shield className="w-6 h-6 text-primary" />
@@ -100,7 +124,7 @@ const Dashboard: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Active Claims</p>
-                <p className="text-2xl font-bold text-foreground mt-1">3</p>
+                <p className="text-2xl font-bold text-foreground mt-1">{activeClaims}</p>
               </div>
               <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center">
                 <FileText className="w-6 h-6 text-accent" />
@@ -114,7 +138,9 @@ const Dashboard: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground">Pending Bills</p>
-                <p className="text-2xl font-bold text-foreground mt-1">$1,245.00</p>
+                <p className="text-2xl font-bold text-foreground mt-1">
+                  ${pendingBills.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
               </div>
               <div className="w-12 h-12 rounded-xl bg-warning/10 flex items-center justify-center">
                 <TrendingUp className="w-6 h-6 text-warning" />
@@ -158,23 +184,32 @@ const Dashboard: React.FC = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {recentActivity.map((activity, index) => (
-                <div key={index} className="flex items-center gap-4 p-3 rounded-lg hover:bg-secondary/50 transition-colors">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                    activity.status === 'success' ? 'bg-success/10' : 'bg-warning/10'
-                  }`}>
-                    {activity.status === 'success' ? (
-                      <CheckCircle className="w-5 h-5 text-success" />
-                    ) : (
-                      <AlertCircle className="w-5 h-5 text-warning" />
-                    )}
+              {recentActivity.length > 0 ? (
+                recentActivity.map((activity, index) => (
+                  <div key={index} className="flex items-center gap-4 p-3 rounded-lg hover:bg-secondary/50 transition-colors">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                      activity.status === 'success' ? 'bg-success/10' : 
+                      activity.status === 'error' ? 'bg-destructive/10' : 'bg-warning/10'
+                    }`}>
+                      {activity.status === 'success' ? (
+                        <CheckCircle className="w-5 h-5 text-success" />
+                      ) : activity.status === 'error' ? (
+                        <AlertCircle className="w-5 h-5 text-destructive" />
+                      ) : (
+                        <Clock className="w-5 h-5 text-warning" />
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-medium text-foreground">{activity.text}</p>
+                      <p className="text-sm text-muted-foreground">{activity.date}</p>
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <p className="font-medium text-foreground">{activity.text}</p>
-                    <p className="text-sm text-muted-foreground">{activity.date}</p>
-                  </div>
+                ))
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  No recent activity
                 </div>
-              ))}
+              )}
             </div>
           </CardContent>
         </Card>

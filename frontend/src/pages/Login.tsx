@@ -12,7 +12,8 @@ const Login: React.FC = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const { login, isAuthenticated } = useAuth();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { login, isAuthenticated, clearError } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -22,33 +23,58 @@ const Login: React.FC = () => {
     }
   }, [isAuthenticated, navigate]);
 
+  // Clear errors when component unmounts or user starts typing
+  React.useEffect(() => {
+    return () => clearError();
+  }, [clearError]);
+
+  const handleEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setEmail(e.target.value);
+    clearError();
+  };
+
+  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPassword(e.target.value);
+    clearError();
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Prevent double submission
+    if (isSubmitting) return;
+    
     setIsLoading(true);
+    setIsSubmitting(true);
 
     try {
-      const success = await login(email, password);
-      if (success) {
+      const result = await login(email, password);
+      
+      if (result.success) {
         toast({
           title: 'Welcome back!',
           description: 'You have successfully logged in.',
         });
         navigate('/dashboard');
       } else {
+        // Show specific error message from AuthContext
         toast({
           title: 'Login failed',
-          description: 'Please check your credentials and try again.',
+          description: result.error?.message || 'Please check your credentials and try again.',
           variant: 'destructive',
         });
       }
     } catch (error) {
+      // This should rarely happen now that errors are handled in AuthContext
       toast({
         title: 'Error',
-        description: 'An error occurred. Please try again.',
+        description: 'An unexpected error occurred. Please try again.',
         variant: 'destructive',
       });
     } finally {
       setIsLoading(false);
+      // Re-enable submission after a short delay to prevent rapid clicking
+      setTimeout(() => setIsSubmitting(false), 500);
     }
   };
 
@@ -121,8 +147,9 @@ const Login: React.FC = () => {
                   type="email"
                   placeholder="john@example.com"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={handleEmailChange}
                   className="pl-10 h-12 input-focus"
+                  disabled={isLoading}
                   required
                 />
               </div>
@@ -137,14 +164,16 @@ const Login: React.FC = () => {
                   type={showPassword ? 'text' : 'password'}
                   placeholder="••••••••"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={handlePasswordChange}
                   className="pl-10 pr-10 h-12 input-focus"
+                  disabled={isLoading}
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  disabled={isLoading}
                 >
                   {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>

@@ -18,6 +18,7 @@ const BillUpload: React.FC = () => {
     description: '',
   });
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   const { addBill } = useDatabase();
 
@@ -39,6 +40,7 @@ const BillUpload: React.FC = () => {
       return;
     }
 
+    setIsLoading(true);
     try {
       await addBill({
         hospitalName: formData.hospitalName,
@@ -55,12 +57,15 @@ const BillUpload: React.FC = () => {
       // Reset form
       setFormData({ hospitalName: '', billDate: '', amount: '', description: '' });
       setUploadedFiles([]);
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Detailed Bill Upload Error:', error);
       toast({
         title: 'Upload Failed',
-        description: 'There was an error uploading your bill. Please try again.',
+        description: error.message || 'There was an error uploading your bill. Please check the console for details.',
         variant: 'destructive',
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -163,9 +168,17 @@ const BillUpload: React.FC = () => {
             </CardContent>
           </Card>
 
-          <Button onClick={handleSubmit} className="w-full h-12 btn-primary text-base font-semibold">
-            <CheckCircle className="w-5 h-5 mr-2" />
-            Submit Bill
+          <Button 
+            onClick={handleSubmit} 
+            className="w-full h-12 btn-primary text-base font-semibold"
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <div className="w-6 h-6 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin mr-2" />
+            ) : (
+              <CheckCircle className="w-5 h-5 mr-2" />
+            )}
+            {isLoading ? 'Uploading...' : 'Submit Bill'}
           </Button>
         </div>
 

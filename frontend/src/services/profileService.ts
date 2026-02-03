@@ -64,11 +64,12 @@ export const updateProfile = async (
   if (profileData.lastName !== undefined) updateData.last_name = profileData.lastName;
   if (profileData.phone !== undefined) updateData.phone = profileData.phone;
   if (profileData.address !== undefined) updateData.address = profileData.address;
-  if (profileData.dateOfBirth !== undefined) updateData.date_of_birth = profileData.dateOfBirth;
+  if (profileData.dateOfBirth !== undefined) {
+    updateData.date_of_birth = profileData.dateOfBirth === '' ? null : profileData.dateOfBirth;
+  }
   if (profileData.planType !== undefined) updateData.plan_type = profileData.planType;
   if (profileData.email !== undefined) updateData.email = profileData.email;
 
-  console.log('Sending profile update to Supabase:', updateData);
   const { data, error } = await supabase
     .from('profiles')
     .update(updateData)

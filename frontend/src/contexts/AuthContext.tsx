@@ -1,7 +1,35 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { User as SupabaseUser } from '@supabase/supabase-js';
 import { getProfile, updateProfile as updateProfileService, createProfile } from '@/services/profileService';
+
+// Error types for better error handling
+export enum AuthErrorType {
+  NETWORK_ERROR = 'NETWORK_ERROR',
+  INVALID_CREDENTIALS = 'INVALID_CREDENTIALS',
+  TIMEOUT = 'TIMEOUT',
+  PROFILE_ERROR = 'PROFILE_ERROR',
+  UNKNOWN = 'UNKNOWN',
+}
+
+export interface AuthError {
+  type: AuthErrorType;
+  message: string;
+}
+
+// Helper function to wrap promises with timeout
+function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  errorMessage: string = 'Operation timed out'
+): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(errorMessage)), timeoutMs)
+    ),
+  ]);
+}
 
 interface User {
   id: string;
@@ -19,11 +47,13 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
-  signup: (userData: { email: string; password: string; firstName?: string; lastName?: string; phone?: string }) => Promise<boolean>;
+  lastError: AuthError | null;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: AuthError }>;
+  signup: (userData: { email: string; password: string; firstName?: string; lastName?: string; phone?: string }) => Promise<{ success: boolean; error?: AuthError }>;
   logout: () => Promise<void>;
   updateUser: (updatedData: Partial<User>) => Promise<boolean>;
   resetPassword: (email: string) => Promise<boolean>;
+  clearError: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -31,68 +61,119 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [lastError, setLastError] = useState<AuthError | null>(null);
+  const isMountedRef = useRef(true);
 
-  const loadUserProfile = async (supabaseUser: SupabaseUser): Promise<User | null> => {
-    try {
-      const profile = await getProfile(supabaseUser.id);
-      
-      if (!profile) {
-        // Create initial profile if it doesn't exist
-        console.log('Profile missing, creating initial profile for:', supabaseUser.id);
+  // Cleanup on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  const clearError = () => setLastError(null);
+
+  // Enhanced profile loading with retry logic
+  const loadUserProfile = async (
+    supabaseUser: SupabaseUser,
+    retries: number = 2
+  ): Promise<User | null> => {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const profile = await withTimeout(
+          getProfile(supabaseUser.id),
+          5000,
+          'Profile fetch timed out'
+        );
         
-        // Use metadata from signup if available
-        const metadata = supabaseUser.user_metadata || {};
-        
-        const newProfile = await createProfile(supabaseUser.id, {
-          email: supabaseUser.email || '',
-          firstName: metadata.firstName || '',
-          lastName: metadata.lastName || '',
-          phone: metadata.phone || '',
-        });
-        
+        if (!profile) {
+          // Create initial profile if it doesn't exist
+          const metadata = supabaseUser.user_metadata || {};
+          
+          const newProfile = await withTimeout(
+            createProfile(supabaseUser.id, {
+              email: supabaseUser.email || '',
+              firstName: metadata.firstName || '',
+              lastName: metadata.lastName || '',
+              phone: metadata.phone || '',
+            }),
+            8000,
+            'Profile creation timed out'
+          );
+          
+          return {
+            id: newProfile.id,
+            email: newProfile.email,
+            firstName: newProfile.firstName,
+            lastName: newProfile.lastName,
+            phone: newProfile.phone,
+            address: newProfile.address,
+            dateOfBirth: newProfile.dateOfBirth,
+            memberId: newProfile.memberId,
+            planType: newProfile.planType,
+          };
+        }
+
         return {
-          id: newProfile.id,
-          email: newProfile.email,
-          firstName: newProfile.firstName,
-          lastName: newProfile.lastName,
-          phone: newProfile.phone,
-          address: newProfile.address,
-          dateOfBirth: newProfile.dateOfBirth,
-          memberId: newProfile.memberId,
-          planType: newProfile.planType,
+          id: profile.id,
+          email: profile.email,
+          firstName: profile.firstName,
+          lastName: profile.lastName,
+          phone: profile.phone,
+          address: profile.address,
+          dateOfBirth: profile.dateOfBirth,
+          memberId: profile.memberId,
+          planType: profile.planType,
         };
+      } catch (error) {
+        console.error(`Profile load attempt ${attempt + 1} failed:`, error);
+        
+        // If this was the last retry, return null
+        if (attempt === retries) {
+          console.error('All profile load attempts failed');
+          return null;
+        }
+        
+        // Wait before retrying (exponential backoff)
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 500));
       }
-
-      return {
-        id: profile.id,
-        email: profile.email,
-        firstName: profile.firstName,
-        lastName: profile.lastName,
-        phone: profile.phone,
-        address: profile.address,
-        dateOfBirth: profile.dateOfBirth,
-        memberId: profile.memberId,
-        planType: profile.planType,
-      };
-    } catch (error) {
-      console.error('Error loading user profile:', error);
-      return null;
     }
+    
+    return null;
   };
 
   // Initialize auth state
   useEffect(() => {
     // Supabase mode
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user) {
-        const userProfile = await loadUserProfile(session.user);
-        setUser(userProfile);
+    const initSession = async () => {
+      try {
+        const { data, error } = await Promise.race([
+          supabase.auth.getSession(),
+          new Promise<{ data: { session: any }, error: any }>((_, reject) => 
+            setTimeout(() => reject(new Error('Session check timed out')), 10000)
+          )
+        ]);
+
+        if (error) throw error;
+        
+        const session = data?.session;
+        if (session?.user) {
+          const userProfile = await loadUserProfile(session.user);
+          setUser(userProfile);
+        }
+      } catch (error) {
+        console.error('Error initializing session:', error);
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
-    });
+    };
+
+    initSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
+        // Only load profile if we don't have it or if it's a different user
+        // optimization to prevent unnecessary calls
         const userProfile = await loadUserProfile(session.user);
         setUser(userProfile);
       } else {
@@ -102,30 +183,99 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     return () => subscription.unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = async (email: string, password: string): Promise<{ success: boolean; error?: AuthError }> => {
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      clearError();
+      
+      // Add timeout to prevent hanging indefinitely
+      const { data, error } = await withTimeout(
+        supabase.auth.signInWithPassword({
+          email,
+          password,
+        }),
+        10000,
+        'Login request timed out'
+      );
 
       if (error) {
         console.error('Login error:', error);
-        return false;
+        
+        // Determine error type
+        let authError: AuthError;
+        if (error.message.includes('Invalid login credentials')) {
+          authError = {
+            type: AuthErrorType.INVALID_CREDENTIALS,
+            message: 'Invalid email or password. Please try again.',
+          };
+        } else if (error.message.includes('timed out') || error.message.includes('timeout')) {
+          authError = {
+            type: AuthErrorType.TIMEOUT,
+            message: 'Connection timed out. Please check your internet and try again.',
+          };
+        } else if (error.message.includes('network') || error.message.includes('fetch')) {
+          authError = {
+            type: AuthErrorType.NETWORK_ERROR,
+            message: 'Network error. Please check your connection and try again.',
+          };
+        } else {
+          authError = {
+            type: AuthErrorType.UNKNOWN,
+            message: error.message || 'An unexpected error occurred. Please try again.',
+          };
+        }
+        
+        setLastError(authError);
+        return { success: false, error: authError };
       }
 
-      if (data.user) {
+      // CRITICAL: Only proceed if we have BOTH a valid user AND session
+      // This prevents authentication bypass
+      if (data.user && data.session) {
+        // Load user profile before setting authenticated state
+        // This prevents premature redirect
         const userProfile = await loadUserProfile(data.user);
-        setUser(userProfile);
-        return true;
+        
+        if (userProfile && isMountedRef.current) {
+          setUser(userProfile);
+          return { success: true };
+        } else {
+          // Profile load failed, but we have valid auth
+          // Set basic user data as fallback
+          const basicUser: User = {
+            id: data.user.id,
+            email: data.user.email || '',
+          };
+          
+          if (isMountedRef.current) {
+            setUser(basicUser);
+          }
+          return { success: true };
+        }
       }
 
-      return false;
+      const unknownError: AuthError = {
+        type: AuthErrorType.UNKNOWN,
+        message: 'Login failed. Please try again.',
+      };
+      setLastError(unknownError);
+      return { success: false, error: unknownError };
     } catch (error) {
       console.error('Login exception:', error);
-      return false;
+      
+      const authError: AuthError = {
+        type: error instanceof Error && error.message.includes('timed out') 
+          ? AuthErrorType.TIMEOUT 
+          : AuthErrorType.NETWORK_ERROR,
+        message: error instanceof Error && error.message.includes('timed out')
+          ? 'Connection timed out. Please check your internet and try again.'
+          : 'Network error. Please check your connection and try again.',
+      };
+      
+      setLastError(authError);
+      return { success: false, error: authError };
     }
   };
 
@@ -135,36 +285,103 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     firstName?: string; 
     lastName?: string;
     phone?: string;
-  }): Promise<boolean> => {
+  }): Promise<{ success: boolean; error?: AuthError }> => {
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email: userData.email,
-        password: userData.password,
-        options: {
-          data: {
-            firstName: userData.firstName || '',
-            lastName: userData.lastName || '',
-            phone: userData.phone || '',
+      clearError();
+      
+      // Add timeout to prevent hanging indefinitely
+      const { data, error } = await withTimeout(
+        supabase.auth.signUp({
+          email: userData.email,
+          password: userData.password,
+          options: {
+            data: {
+              firstName: userData.firstName || '',
+              lastName: userData.lastName || '',
+              phone: userData.phone || '',
+            },
           },
-        },
-      });
+        }),
+        10000,
+        'Signup request timed out'
+      );
 
       if (error) {
         console.error('Signup error:', error);
-        return false;
+        
+        // Determine error type
+        let authError: AuthError;
+        if (error.message.includes('already registered') || error.message.includes('already exists')) {
+          authError = {
+            type: AuthErrorType.INVALID_CREDENTIALS,
+            message: 'This email is already registered. Please login instead.',
+          };
+        } else if (error.message.includes('timed out') || error.message.includes('timeout')) {
+          authError = {
+            type: AuthErrorType.TIMEOUT,
+            message: 'Connection timed out. Please check your internet and try again.',
+          };
+        } else if (error.message.includes('network') || error.message.includes('fetch')) {
+          authError = {
+            type: AuthErrorType.NETWORK_ERROR,
+            message: 'Network error. Please check your connection and try again.',
+          };
+        } else {
+          authError = {
+            type: AuthErrorType.UNKNOWN,
+            message: error.message || 'Signup failed. Please try again.',
+          };
+        }
+        
+        setLastError(authError);
+        return { success: false, error: authError };
       }
 
       if (data.user) {
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Load user profile before setting authenticated state
+        // This ensures consistent behavior with login
         const userProfile = await loadUserProfile(data.user);
-        setUser(userProfile);
-        return true;
+        
+        if (userProfile && isMountedRef.current) {
+          setUser(userProfile);
+          return { success: true };
+        } else {
+          // Profile load/creation failed, set basic user data as fallback
+          const basicUser: User = {
+            id: data.user.id,
+            email: data.user.email || '',
+            firstName: userData.firstName,
+            lastName: userData.lastName,
+            phone: userData.phone,
+          };
+          
+          if (isMountedRef.current) {
+            setUser(basicUser);
+          }
+          return { success: true };
+        }
       }
 
-      return false;
+      const unknownError: AuthError = {
+        type: AuthErrorType.UNKNOWN,
+        message: 'Signup failed. Please try again.',
+      };
+      setLastError(unknownError);
+      return { success: false, error: unknownError };
     } catch (error) {
       console.error('Signup exception:', error);
-      return false;
+      
+      const authError: AuthError = {
+        type: error instanceof Error && error.message.includes('timed out') 
+          ? AuthErrorType.TIMEOUT 
+          : AuthErrorType.NETWORK_ERROR,
+        message: error instanceof Error && error.message.includes('timed out')
+          ? 'Connection timed out. Please check your internet and try again.'
+          : 'Network error. Please check your connection and try again.',
+      };
+      
+      setLastError(authError);
+      return { success: false, error: authError };
     }
   };
 
@@ -191,7 +408,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         email: updatedData.email,
       });
 
-      console.log('Profile update successful in database. New data:', result);
       setUser(result);
       return true;
     } catch (error) {
@@ -219,7 +435,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, login, signup, logout, updateUser, resetPassword }}>
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, isLoading, lastError, login, signup, logout, updateUser, resetPassword, clearError }}>
       {children}
     </AuthContext.Provider>
   );

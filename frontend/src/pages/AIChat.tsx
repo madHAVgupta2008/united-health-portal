@@ -39,26 +39,43 @@ const AIChat: React.FC = () => {
       timestamp: new Date(),
     };
 
-    addChatMessage(userMessage);
-    setInputValue('');
-    setIsTyping(true);
-
-    // Prepare context from recent messages (last 5)
-    const context = messages.slice(-5).map(m => `${m.sender === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n');
-
     try {
-      const response = await generateAIResponse(inputValue, context);
+      // Add user message
+      await addChatMessage(userMessage);
+      setInputValue('');
+      setIsTyping(true);
 
-      const botMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        content: response,
-        sender: 'bot',
-        timestamp: new Date(),
-      };
+      // Prepare context from recent messages (last 5)
+      const context = messages.slice(-5).map(m => `${m.sender === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n');
 
-      addChatMessage(botMessage);
+      try {
+        const response = await generateAIResponse(inputValue, context);
+
+        const botMessage: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          content: response,
+          sender: 'bot',
+          timestamp: new Date(),
+        };
+
+        await addChatMessage(botMessage);
+      } catch (aiError) {
+        console.error('AI Response Error:', aiError);
+        // Still show an error message to the user
+        const errorMessage: ChatMessage = {
+          id: (Date.now() + 1).toString(),
+          content: "I'm sorry, I'm having trouble responding right now. Please try again in a moment.",
+          sender: 'bot',
+          timestamp: new Date(),
+        };
+        await addChatMessage(errorMessage);
+      }
     } catch (error) {
-      console.error(error);
+      console.error('Chat error:', error);
+      // If we couldn't save the user message, show an error
+      alert('Failed to send message. Please check your connection and try again.');
+      // Restore the input
+      setInputValue(userMessage.content);
     } finally {
       setIsTyping(false);
     }

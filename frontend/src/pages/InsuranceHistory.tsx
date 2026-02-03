@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { InsuranceFile } from '@/types';
 import { cn } from '@/lib/utils';
 import { useDatabase } from '@/contexts/DatabaseContext';
+import { supabase } from '@/integrations/supabase/client';
 
 const InsuranceHistory: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -52,6 +53,47 @@ const InsuranceHistory: React.FC = () => {
     { label: 'Pending', value: insuranceFiles.filter((f) => f.status === 'pending').length, color: 'bg-warning/10 text-warning' },
     { label: 'Rejected', value: insuranceFiles.filter((f) => f.status === 'rejected').length, color: 'bg-destructive/10 text-destructive' },
   ];
+
+  const handleFileAction = async (url: string, fileName: string, action: 'view' | 'download') => {
+    try {
+      let finalUrl = url;
+
+      // Check if it's a Supabase storage URL for insurance-documents
+      if (url.includes('supabase.co') && url.includes('insurance-documents')) {
+        // Extract path and remove any existing query parameters
+        const path = url.split('insurance-documents/')[1]?.split('?')[0];
+        if (path) {
+          const decodedPath = decodeURIComponent(path);
+          const { data, error } = await supabase.storage
+            .from('insurance-documents')
+            .createSignedUrl(decodedPath, 3600, {
+              download: action === 'download' ? true : false,
+            }); // 1 hour expiry
+            
+          if (!error && data?.signedUrl) {
+            finalUrl = data.signedUrl;
+          } else {
+            console.error('Error creating signed URL:', error);
+          }
+        }
+      }
+      
+      if (action === 'download') {
+        // Create a temporary anchor element to trigger the download
+        const link = document.createElement('a');
+        link.href = finalUrl;
+        link.setAttribute('download', fileName || 'document');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } else {
+        window.open(finalUrl, '_blank');
+      }
+    } catch (error) {
+      console.error('Error handling file action:', error);
+      window.open(url, '_blank');
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -145,10 +187,18 @@ const InsuranceHistory: React.FC = () => {
                     {getStatusIcon(file.status)}
                     {file.status.charAt(0).toUpperCase() + file.status.slice(1)}
                   </Badge>
-                  <Button variant="ghost" size="icon">
+                  <Button 
+                    variant="ghost" 
+                    size="icon"
+                    onClick={() => handleFileAction(file.fileUrl, file.fileName, 'view')}
+                  >
                     <Eye className="w-5 h-5" />
                   </Button>
-                  <Button variant="ghost" size="icon">
+                   <Button 
+                    variant="ghost" 
+                    size="icon"
+                    onClick={() => handleFileAction(file.fileUrl, file.fileName, 'download')}
+                  >
                     <Download className="w-5 h-5" />
                   </Button>
                 </div>
