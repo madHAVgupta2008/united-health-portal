@@ -96,6 +96,7 @@ const Signup: React.FC = () => {
         });
       }
     } catch (error) {
+      console.error('Signup error:', error);
       toast({
         title: 'Error',
         description: 'An unexpected error occurred. Please try again.',

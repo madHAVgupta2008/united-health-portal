@@ -65,6 +65,7 @@ const Login: React.FC = () => {
         });
       }
     } catch (error) {
+      console.error('Login error:', error);
       // This should rarely happen now that errors are handled in AuthContext
       toast({
         title: 'Error',

@@ -133,12 +133,7 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
       })));
 
       // Convert chat messages inline
-      setChatHistory(chatData.map(msg => ({
-        id: msg.id,
-        content: msg.content,
-        sender: msg.sender,
-        timestamp: new Date(msg.createdAt),
-      })));
+      setChatHistory(chatData.map(convertChatMessage));
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -176,7 +171,7 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
   };
 
   const uploadDocument = async (
-    docData: Omit<InsuranceFile, 'id' | 'uploadDate' | 'status' | 'fileSize'>,
+    docData: Omit<InsuranceFile, 'id' | 'uploadDate' | 'status' | 'fileSize' | 'fileUrl'>,
     file: File
   ): Promise<void> => {
     if (!user) throw new Error('User not authenticated');

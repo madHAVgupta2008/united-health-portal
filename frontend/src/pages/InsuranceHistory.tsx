@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
-import { FileText, Search, Download, Eye, Calendar, Filter, CheckCircle, Clock, XCircle } from 'lucide-react';
+import { FileText, Search, Download, Eye, Calendar, CheckCircle, Clock, XCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { InsuranceFile } from '@/types';
 import { cn } from '@/lib/utils';
 import { useDatabase } from '@/contexts/DatabaseContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -79,19 +78,45 @@ const InsuranceHistory: React.FC = () => {
       }
       
       if (action === 'download') {
-        // Create a temporary anchor element to trigger the download
-        const link = document.createElement('a');
-        link.href = finalUrl;
-        link.setAttribute('download', fileName || 'document');
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        try {
+          // Fetch the file as a blob to avoid page navigation
+          const response = await fetch(finalUrl, { mode: 'cors' });
+          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+          const blob = await response.blob();
+          const blobUrl = window.URL.createObjectURL(blob);
+          
+          const link = document.createElement('a');
+          link.href = blobUrl;
+          link.setAttribute('download', fileName || 'document');
+          link.style.display = 'none';
+          document.body.appendChild(link);
+          link.click();
+          
+          // Clean up after a short delay
+          setTimeout(() => {
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(blobUrl);
+          }, 100);
+        } catch (downloadError) {
+          console.error('Download failed, using iframe fallback:', downloadError);
+          // Use iframe to download without navigating away from current page
+          const iframe = document.createElement('iframe');
+          iframe.style.display = 'none';
+          iframe.src = finalUrl;
+          document.body.appendChild(iframe);
+          
+          // Clean up iframe after download starts
+          setTimeout(() => {
+            document.body.removeChild(iframe);
+          }, 5000);
+        }
       } else {
-        window.open(finalUrl, '_blank');
+        window.open(finalUrl, '_blank', 'noopener,noreferrer');
       }
     } catch (error) {
       console.error('Error handling file action:', error);
-      window.open(url, '_blank');
+      // Last resort: open in new tab with safety flags
+      window.open(url, '_blank', 'noopener,noreferrer');
     }
   };
 
