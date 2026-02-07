@@ -262,3 +262,104 @@ export const analyzeBillDetails = async (file: File): Promise<BillAnalysisResult
     return null;
   }
 };
+
+export interface InsuranceAnalysisResult {
+  overview: {
+    policyNumber?: string;
+    insurerName?: string;
+    policyHolder?: string;
+    effectiveDate?: string;
+    expirationDate?: string;
+    summary: string;
+  };
+  coverage: {
+    type: string;
+    limit: string;
+    deductible?: string;
+    copay?: string;
+  }[];
+  benefits: {
+    category: string;
+    description: string;
+    covered: boolean;
+  }[];
+  exclusions: {
+    item: string;
+    reason: string;
+  }[];
+  recommendations: {
+    title: string;
+    description: string;
+    priority: 'High' | 'Medium' | 'Low';
+  }[];
+}
+
+export const analyzeInsuranceDetails = async (file: File): Promise<InsuranceAnalysisResult | null> => {
+  try {
+    const base64Data = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result as string;
+        const base64 = base64String.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+    const prompt = `
+      Analyze this insurance document image/PDF in detail.
+      
+      Extract the following information and return ONLY a valid JSON object:
+      
+      1. **Overview**: Policy number, insurer name, policy holder name, effective and expiration dates. Provide a brief summary.
+      2. **Coverage**: List all coverage types with their limits, deductibles, and copays.
+      3. **Benefits**: What services/items are covered under this policy.
+      4. **Exclusions**: What is NOT covered and why.
+      5. **Recommendations**: Personalized tips for the user based on this policy.
+
+      JSON Structure:
+      {
+        "overview": {
+          "policyNumber": string | null,
+          "insurerName": string | null,
+          "policyHolder": string | null,
+          "effectiveDate": string | null,
+          "expirationDate": string | null,
+          "summary": string
+        },
+        "coverage": [
+          { "type": "Coverage Type", "limit": "$X", "deductible": "$Y", "copay": "$Z" }
+        ],
+        "benefits": [
+          { "category": "Category Name", "description": "What's covered", "covered": true }
+        ],
+        "exclusions": [
+          { "item": "What's excluded", "reason": "Why it's excluded" }
+        ],
+        "recommendations": [
+          { "title": "Recommendation", "description": "Detailed advice", "priority": "High" | "Medium" | "Low" }
+        ]
+      }
+    `;
+
+    const result = await model.generateContent([
+      prompt,
+      {
+        inlineData: {
+          data: base64Data,
+          mimeType: file.type
+        }
+      }
+    ]);
+
+    const response = await result.response;
+    const text = response.text();
+    const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    return JSON.parse(cleanJson);
+
+  } catch (error) {
+    console.error("Insurance Document Analysis Failed:", error);
+    return null;
+  }
+};

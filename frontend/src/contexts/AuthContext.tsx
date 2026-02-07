@@ -78,13 +78,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     supabaseUser: SupabaseUser,
     retries: number = 2
   ): Promise<User | null> => {
+    console.log('[Profile] Starting to load profile for user:', supabaseUser.id);
     for (let attempt = 0; attempt <= retries; attempt++) {
       try {
+        console.log(`[Profile] Attempt ${attempt + 1}: Fetching profile...`);
         let profile = await withTimeout(
           getProfile(supabaseUser.id),
-          5000,
+          15000,
           'Profile fetch timed out'
         );
+        console.log('[Profile] Fetch result:', profile);
 
         const metadata = supabaseUser.user_metadata || {};
 
@@ -171,7 +174,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const { data, error } = await Promise.race([
           supabase.auth.getSession(),
           new Promise<{ data: { session: null }, error: Error }>((_, reject) =>
-            setTimeout(() => reject(new Error('Session check timed out')), 20000)
+            setTimeout(() => reject(new Error('Session check timed out')), 30000)
           )
         ]);
 

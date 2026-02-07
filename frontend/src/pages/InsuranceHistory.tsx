@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileText, Search, Download, Eye, Calendar, CheckCircle, Clock, XCircle, Trash2 } from 'lucide-react';
+import { FileText, Search, Download, Eye, Calendar, CheckCircle, Clock, XCircle, Trash2, Sparkles } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,12 +9,18 @@ import { useDatabase } from '@/contexts/DatabaseContext';
 import { supabase } from '@/integrations/supabase/client';
 
 import { useToast } from '@/hooks/use-toast';
+import { analyzeInsuranceDetails, InsuranceAnalysisResult } from '@/services/ai';
+import InsuranceAnalysisModal from '@/components/insurance/InsuranceAnalysisModal';
 
 const InsuranceHistory: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const { insuranceFiles, deleteDocument } = useDatabase();
   const { toast } = useToast();
+
+  const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState<InsuranceAnalysisResult | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const handleDeleteDocument = async (docId: string) => {
     if (window.confirm('Are you sure you want to delete this document? This action cannot be undone.')) {
@@ -32,6 +38,63 @@ const InsuranceHistory: React.FC = () => {
           variant: 'destructive',
         });
       }
+    }
+  };
+
+  const handleAnalyzeDocument = async (docUrl?: string) => {
+    if (!docUrl) {
+      toast({
+        title: "No File",
+        description: "This document does not have an attached file to analyze.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      setIsAnalyzing(true);
+      setAnalysisResult(null);
+      setIsAnalysisModalOpen(true);
+
+      let finalUrl = docUrl;
+      if (docUrl.includes('supabase.co') && docUrl.includes('insurance-documents')) {
+        const path = docUrl.split('insurance-documents/')[1]?.split('?')[0];
+        if (path) {
+          const decodedPath = decodeURIComponent(path);
+          const { data } = await supabase.storage
+            .from('insurance-documents')
+            .createSignedUrl(decodedPath, 3600);
+          if (data?.signedUrl) finalUrl = data.signedUrl;
+        }
+      }
+
+      const response = await fetch(finalUrl);
+      const blob = await response.blob();
+      const file = new File([blob], "document.jpg", { type: blob.type });
+
+      const result = await analyzeInsuranceDetails(file);
+
+      if (result) {
+        setAnalysisResult(result);
+      } else {
+        toast({
+          title: "Analysis Failed",
+          description: "Could not analyze the document structure.",
+          variant: "destructive"
+        });
+        setIsAnalysisModalOpen(false);
+      }
+
+    } catch (error) {
+      console.error("Analysis error:", error);
+      toast({
+        title: "Error",
+        description: "Failed to process the insurance document.",
+        variant: "destructive"
+      });
+      setIsAnalysisModalOpen(false);
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
@@ -251,6 +314,15 @@ const InsuranceHistory: React.FC = () => {
                   <Button
                     variant="ghost"
                     size="icon"
+                    className="text-primary hover:text-primary hover:bg-primary/10"
+                    title="AI Analysis"
+                    onClick={() => handleAnalyzeDocument(file.fileUrl)}
+                  >
+                    <Sparkles className="w-5 h-5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
                     className="text-destructive hover:text-destructive hover:bg-destructive/10"
                     onClick={() => handleDeleteDocument(file.id)}
                   >
@@ -269,6 +341,13 @@ const InsuranceHistory: React.FC = () => {
           </div>
         </CardContent>
       </Card>
+
+      <InsuranceAnalysisModal
+        isOpen={isAnalysisModalOpen}
+        onClose={() => setIsAnalysisModalOpen(false)}
+        result={analysisResult}
+        isLoading={isAnalyzing}
+      />
     </div>
   );
 };
