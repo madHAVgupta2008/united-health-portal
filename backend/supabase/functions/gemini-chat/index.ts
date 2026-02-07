@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { GoogleGenerativeAI } from "@google/generative-ai"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -20,20 +19,64 @@ serve(async (req) => {
 
     const { prompt, history, image } = await req.json()
 
-    const genAI = new GoogleGenerativeAI(GEMINI_API_KEY)
-    
-    let result;
+    // Use REST API directly instead of SDK for better compatibility
+    const model = 'gemini-2.5-flash'
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`
+
+    let requestBody: any
+
     if (image) {
-       const modelVision = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-       result = await modelVision.generateContent([prompt, image]);
+      // Handle image input
+      requestBody = {
+        contents: [{
+          parts: [
+            { text: prompt },
+            {
+              inlineData: {
+                mimeType: image.inlineData?.mimeType || 'image/jpeg',
+                data: image.inlineData?.data || image
+              }
+            }
+          ]
+        }]
+      }
     } else {
-       const modelText = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-       const fullPrompt = history ? `${history}\n\nUser: ${prompt}` : prompt;
-       result = await modelText.generateContent(fullPrompt);
+      // Handle text-only input
+      const systemPrompt = `You are a helpful AI Health Assistant for United Health Financial Portal. 
+Your role is to help users understand their healthcare coverage, explain medical bills, answer insurance questions, and provide general health information.
+Be friendly, helpful, and concise. If you see any error messages in the conversation history, ignore them - they were technical glitches that have been resolved.
+Now respond to the user's message.`;
+      
+      const fullPrompt = history 
+        ? `${systemPrompt}\n\nPrevious conversation:\n${history}\n\nUser: ${prompt}`
+        : `${systemPrompt}\n\nUser: ${prompt}`;
+      
+      requestBody = {
+        contents: [{
+          parts: [{ text: fullPrompt }]
+        }]
+      }
     }
 
-    const response = result.response;
-    const text = response.text();
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody)
+    })
+
+    if (!response.ok) {
+      const errorData = await response.text()
+      console.error('Gemini API Error:', response.status, errorData)
+      throw new Error(`Gemini API error: ${response.status} - ${errorData}`)
+    }
+
+    const data = await response.json()
+    
+    // Extract text from response
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || 
+                 'Sorry, I could not generate a response.'
 
     return new Response(
       JSON.stringify({ text }),
