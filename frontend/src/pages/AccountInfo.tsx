@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { User, Mail, Phone, MapPin, Calendar, CreditCard, Shield, Edit2, Save } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { User, Mail, Phone, MapPin, Calendar, CreditCard, Shield, Edit2, Save, Moon, Sun, Settings } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,11 +7,50 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 
+const ACCENT_COLORS = [
+  { name: 'Blue', value: '221 83% 53%', class: 'bg-blue-600' },
+  { name: 'Emerald', value: '142 76% 36%', class: 'bg-emerald-600' },
+  { name: 'Purple', value: '262 83% 58%', class: 'bg-purple-600' },
+  { name: 'Orange', value: '24 94% 50%', class: 'bg-orange-600' },
+  { name: 'Rose', value: '346 84% 61%', class: 'bg-rose-600' },
+];
+
 const AccountInfo: React.FC = () => {
   const { user, updateUser } = useAuth();
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  
+  // Theme state
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const saved = localStorage.getItem('theme');
+    if (saved) return saved === 'dark';
+    return document.documentElement.classList.contains('dark');
+  });
+
+  // Access state
+  const [accentColor, setAccentColor] = useState(() => {
+    return localStorage.getItem('accent_color') || ACCENT_COLORS[0].value;
+  });
+
+  // Apply theme
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [isDarkMode]);
+
+  // Apply accent color
+  useEffect(() => {
+    document.documentElement.style.setProperty('--primary', accentColor);
+    localStorage.setItem('accent_color', accentColor);
+  }, [accentColor]);
+  
+  
   const [formData, setFormData] = useState({
     firstName: user?.firstName || '',
     lastName: user?.lastName || '',
@@ -264,6 +303,81 @@ const AccountInfo: React.FC = () => {
               <p className="text-sm text-muted-foreground">Renewal Date</p>
               <p className="font-semibold text-foreground mt-1">Dec 31, 2025</p>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Preferences Card */}
+      <Card className="card-elevated">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Settings className="w-5 h-5 text-primary" />
+            Preferences
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between p-4 bg-secondary/30 rounded-xl mb-4">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center transition-colors duration-300">
+                <div className="w-6 h-6 rounded-full bg-primary shadow-sm" />
+              </div>
+              <div>
+                <p className="font-medium text-foreground">Accent Color</p>
+                <p className="text-sm text-muted-foreground">
+                  Personalize your interface
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              {ACCENT_COLORS.map((color) => (
+                <button
+                  key={color.name}
+                  onClick={() => setAccentColor(color.value)}
+                  className={`w-8 h-8 rounded-full ${color.class} transition-all duration-200 ${
+                    accentColor === color.value 
+                      ? 'ring-2 ring-offset-2 ring-offset-card ring-primary scale-110' 
+                      : 'hover:scale-110 opacity-70 hover:opacity-100'
+                  }`}
+                  title={color.name}
+                  aria-label={`Select ${color.name} theme`}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between p-4 bg-secondary/30 rounded-xl">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                {isDarkMode ? (
+                  <Moon className="w-6 h-6 text-primary" />
+                ) : (
+                  <Sun className="w-6 h-6 text-primary" />
+                )}
+              </div>
+              <div>
+                <p className="font-medium text-foreground">Theme</p>
+                <p className="text-sm text-muted-foreground">
+                  {isDarkMode ? 'Dark mode enabled' : 'Light mode enabled'}
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => setIsDarkMode(!isDarkMode)}
+              className="flex items-center gap-2"
+            >
+              {isDarkMode ? (
+                <>
+                  <Sun className="w-4 h-4" />
+                  Switch to Light
+                </>
+              ) : (
+                <>
+                  <Moon className="w-4 h-4" />
+                  Switch to Dark
+                </>
+              )}
+            </Button>
           </div>
         </CardContent>
       </Card>

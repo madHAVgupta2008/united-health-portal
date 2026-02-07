@@ -5,12 +5,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { useDatabase } from '@/contexts/DatabaseContext';
+import { useDatabase, Bill } from '@/contexts/DatabaseContext';
 import { supabase } from '@/integrations/supabase/client';
 
 import { useToast } from '@/hooks/use-toast';
 import { analyzeBillDetails, BillAnalysisResult } from '@/services/ai';
 import BillAnalysisModal from '@/components/bill/BillAnalysisModal';
+import PaymentModal from '@/components/bill/PaymentModal';
 
 const BillHistory: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -21,6 +22,10 @@ const BillHistory: React.FC = () => {
   const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<BillAnalysisResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  // Payment Modal State
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [selectedBillForPayment, setSelectedBillForPayment] = useState<Bill | null>(null);
 
   const handleAnalyzeBill = async (billUrl?: string) => {
     if (!billUrl) {
@@ -80,18 +85,25 @@ const BillHistory: React.FC = () => {
     }
   };
 
-  const handleMarkAsPaid = async (billId: string) => {
+  const initiatePayment = (bill: any) => {
+      setSelectedBillForPayment(bill);
+      setIsPaymentModalOpen(true);
+  };
+
+  const handlePaymentComplete = async (billId: string) => {
     try {
       await updateBillStatus(billId, 'paid');
       toast({
-        title: 'Bill Updated',
-        description: 'The bill has been marked as paid.',
+        title: 'Payment Successful',
+        description: 'Thank you! Your bill has been marked as paid.',
       });
+      setIsPaymentModalOpen(false);
+      setSelectedBillForPayment(null);
     } catch (error) {
       console.error('Error updating bill:', error);
       toast({
         title: 'Update Failed',
-        description: 'Failed to update bill status.',
+        description: 'Failed to update bill status after payment.',
         variant: 'destructive',
       });
     }
@@ -337,12 +349,11 @@ const BillHistory: React.FC = () => {
                     {bill.status === 'pending' && (
                       <Button
                         size="sm"
-                        variant="outline"
-                        className="h-8 text-green-600 border-green-200 hover:bg-green-50 hover:text-green-700 hover:border-green-300"
-                        onClick={() => handleMarkAsPaid(bill.id)}
+                        className="h-8 btn-primary bg-green-600 hover:bg-green-700"
+                        onClick={() => initiatePayment(bill)}
                       >
-                        <CheckCircle className="w-4 h-4 mr-1" />
-                        Mark Paid
+                        <CreditCard className="w-4 h-4 mr-1" />
+                        Pay Now
                       </Button>
                     )}
 
@@ -397,6 +408,13 @@ const BillHistory: React.FC = () => {
         onClose={() => setIsAnalysisModalOpen(false)}
         result={analysisResult}
         isLoading={isAnalyzing}
+      />
+
+      <PaymentModal
+        isOpen={isPaymentModalOpen}
+        onClose={() => setIsPaymentModalOpen(false)}
+        bill={selectedBillForPayment}
+        onPaymentComplete={handlePaymentComplete}
       />
     </div>
   );

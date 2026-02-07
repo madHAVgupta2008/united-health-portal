@@ -201,10 +201,24 @@ export const addBill = async (
             })
             .eq('id', data.id);
         }
-      } catch (aiError) {
+        } catch (aiError) {
         console.error('AI Analysis failed, proceeding with original data', aiError);
         // Fallback: just set to pending so it's not stuck in processing
         await supabase.from('hospital_bills').update({ status: 'pending' }).eq('id', data.id);
+        
+        // Return updated object so UI reflects change
+        return {
+          id: data.id,
+          userId: data.user_id,
+          hospitalName: data.hospital_name,
+          billDate: data.bill_date,
+          amount: data.amount,
+          status: 'pending', // Explicitly set to pending
+          description: data.description || '',
+          fileUrl: data.file_url || undefined,
+          createdAt: data.created_at || new Date().toISOString(),
+          updatedAt: data.updated_at || new Date().toISOString(),
+        };
       }
     }
 

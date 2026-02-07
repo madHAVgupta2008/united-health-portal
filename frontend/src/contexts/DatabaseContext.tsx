@@ -4,6 +4,8 @@ import { getBills, addBill as addBillService, updateBillStatus as updateBillStat
 import { getDocuments, uploadDocument as uploadDocumentService, deleteDocument as deleteDocumentService, InsuranceDocument } from '@/services/insuranceService';
 import { getChatHistory, saveChatMessage, clearChatHistory as clearChatHistoryService, ChatMessage as ChatMsg } from '@/services/chatService';
 
+export type { Bill };
+
 interface HospitalBill {
   id: string;
   hospitalName: string;

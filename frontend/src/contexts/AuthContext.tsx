@@ -59,10 +59,55 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  // Load cached user from localStorage on init
+  const getCachedUser = (): User | null => {
+    try {
+      const cached = localStorage.getItem('cached_user_profile');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        // Only return if cached within last 24 hours
+        if (parsed.timestamp && Date.now() - parsed.timestamp < 24 * 60 * 60 * 1000) {
+          return parsed.user;
+        }
+      }
+    } catch (e) {
+      console.error('Error reading cached user:', e);
+    }
+    return null;
+  };
+
+  const cacheUser = (userData: User | null) => {
+    try {
+      if (userData) {
+        localStorage.setItem('cached_user_profile', JSON.stringify({
+          user: userData,
+          timestamp: Date.now()
+        }));
+      } else {
+        localStorage.removeItem('cached_user_profile');
+      }
+    } catch (e) {
+      console.error('Error caching user:', e);
+    }
+  };
+
+  const cachedUserOnInit = getCachedUser();
+  const [user, setUserInternal] = useState<User | null>(cachedUserOnInit);
+  // If we have a cached user with complete profile, don't show loading
+  const [isLoading, setIsLoading] = useState(!(cachedUserOnInit && cachedUserOnInit.firstName));
   const [lastError, setLastError] = useState<AuthError | null>(null);
   const isMountedRef = useRef(true);
+
+  // Wrapper to also cache user when setting
+  const setUser = (userData: User | null) => {
+    setUserInternal(userData);
+    if (userData && userData.firstName) {
+      // Only cache complete profiles
+      cacheUser(userData);
+    } else if (userData === null) {
+      cacheUser(null);
+    }
+  };
 
   // Cleanup on unmount to prevent memory leaks
   useEffect(() => {
@@ -184,24 +229,41 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         if (session?.user) {
           // Only set user if email is verified
           if (session.user.email_confirmed_at) {
+            // Check if we have a valid cached profile for this user
+            const cachedUser = getCachedUser();
+            if (cachedUser && cachedUser.id === session.user.id && cachedUser.firstName) {
+              console.log('[Profile] Using cached profile for user:', session.user.id);
+              setUser(cachedUser);
+              setIsLoading(false);
+              return;
+            }
+            
             try {
               const userProfile = await loadUserProfile(session.user);
               if (userProfile) {
                 setUser(userProfile);
               } else {
-                // Use basic user if profile fails
+                // Only set basic user if we don't have cached data
+                const cached = getCachedUser();
+                if (!cached || cached.id !== session.user.id) {
+                  setUser({
+                    id: session.user.id,
+                    email: session.user.email || '',
+                  });
+                }
+                // Otherwise keep the cached user
+              }
+            } catch (error) {
+              console.error('Profile load failed during init:', error);
+              // Keep cached user if we have one for this user
+              const cached = getCachedUser();
+              if (!cached || cached.id !== session.user.id) {
                 setUser({
                   id: session.user.id,
                   email: session.user.email || '',
                 });
               }
-            } catch (error) {
-              console.error('Profile load failed during init:', error);
-              // Still set basic user
-              setUser({
-                id: session.user.id,
-                email: session.user.email || '',
-              });
+              // Otherwise keep the cached user
             }
           } else {
             // Email not verified, don't set user
@@ -221,22 +283,58 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (session?.user) {
         // Only set user if email is verified
         if (session.user.email_confirmed_at) {
+          // Check if we already have a complete profile for this user
+          const currentUser = user;
+          const hasCompleteProfile = currentUser && 
+            currentUser.id === session.user.id && 
+            currentUser.firstName && 
+            currentUser.phone;
+          
+          if (hasCompleteProfile) {
+            // Keep existing profile data - no need to reload
+            console.log('[Profile] Keeping existing profile data on auth state change');
+            return;
+          }
+          
           try {
             const userProfile = await loadUserProfile(session.user);
             if (userProfile) {
               setUser(userProfile);
+            } else if (currentUser && currentUser.id === session.user.id && currentUser.firstName) {
+              // Keep existing data if profile fetch failed
+              console.log('[Profile] Keeping existing user data after failed reload');
             } else {
-              setUser({
-                id: session.user.id,
-                email: session.user.email || '',
-              });
+              // Check localStorage cache as fallback
+              const cached = getCachedUser();
+              if (cached && cached.id === session.user.id && cached.firstName) {
+                console.log('[Profile] Using localStorage cache after failed reload');
+                setUser(cached);
+              } else {
+                setUser({
+                  id: session.user.id,
+                  email: session.user.email || '',
+                });
+              }
             }
           } catch (error) {
             console.error('Profile load failed in auth change:', error);
-            setUser({
-              id: session.user.id,
-              email: session.user.email || '',
-            });
+            // Keep existing user data if we have it for the same user
+            if (currentUser && currentUser.id === session.user.id && currentUser.firstName) {
+              console.log('[Profile] Preserving existing profile after error');
+              // Don't update - keep existing data
+            } else {
+              // Check localStorage cache as fallback
+              const cached = getCachedUser();
+              if (cached && cached.id === session.user.id && cached.firstName) {
+                console.log('[Profile] Using localStorage cache after error');
+                setUser(cached);
+              } else {
+                setUser({
+                  id: session.user.id,
+                  email: session.user.email || '',
+                });
+              }
+            }
           }
         } else {
           // Email not verified, don't set user

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileText, Search, Download, Eye, Calendar, CheckCircle, Clock, XCircle, Trash2, Sparkles } from 'lucide-react';
+import { FileText, Search, Download, Eye, Calendar, CheckCircle, Clock, XCircle, Trash2, Sparkles, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,10 +21,12 @@ const InsuranceHistory: React.FC = () => {
   const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<InsuranceAnalysisResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const handleDeleteDocument = async (docId: string) => {
     if (window.confirm('Are you sure you want to delete this document? This action cannot be undone.')) {
       try {
+        setDeletingId(docId);
         await deleteDocument(docId);
         toast({
           title: 'Document Deleted',
@@ -37,6 +39,8 @@ const InsuranceHistory: React.FC = () => {
           description: 'Failed to delete the document.',
           variant: 'destructive',
         });
+      } finally {
+        setDeletingId(null);
       }
     }
   };
@@ -325,8 +329,13 @@ const InsuranceHistory: React.FC = () => {
                     size="icon"
                     className="text-destructive hover:text-destructive hover:bg-destructive/10"
                     onClick={() => handleDeleteDocument(file.id)}
+                    disabled={deletingId === file.id}
                   >
-                    <Trash2 className="w-5 h-5" />
+                    {deletingId === file.id ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-5 h-5" />
+                    )}
                   </Button>
                 </div>
               </div>

@@ -15,8 +15,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useDatabase } from '@/contexts/DatabaseContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-
 import { Skeleton } from '@/components/ui/skeleton';
+import SpendingChart from '@/components/dashboard/SpendingChart';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
@@ -25,7 +25,7 @@ const Dashboard: React.FC = () => {
   const activeClaims = insuranceFiles.filter(f => f.status === 'pending').length;
   
   const pendingBills = bills
-    .filter(b => b.status === 'pending')
+    .filter(b => b.status === 'pending' || b.status === 'processing')
     .reduce((sum, bill) => sum + bill.amount, 0);
 
   // Generate recent activity from real data
@@ -162,6 +162,11 @@ const Dashboard: React.FC = () => {
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Spending Analytics */}
+      <div className="grid grid-cols-1 gap-6">
+        <SpendingChart bills={bills as any[]} isLoading={isLoading} />
       </div>
 
       {/* Quick Actions */}

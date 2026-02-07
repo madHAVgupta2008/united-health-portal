@@ -1,5 +1,4 @@
 import type { Config } from "tailwindcss";
-// @ts-expect-error - Dynamic import for tailwindcss-animate plugin
 import tailwindAnimate from "tailwindcss-animate";
 
 export default {
@@ -96,7 +95,7 @@ export default {
         "pulse-slow": "pulse-slow 2s ease-in-out infinite",
       },
       boxShadow: {
-        'primary': '0 10px 40px -10px hsl(221, 83%, 53%, 0.4)',
+        'primary': '0 10px 40px -10px hsl(var(--primary) / 0.4)',
         'card': '0 4px 20px -2px rgba(0, 0, 0, 0.08)',
       },
     },
