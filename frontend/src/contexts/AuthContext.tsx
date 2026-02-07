@@ -171,7 +171,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const { data, error } = await Promise.race([
           supabase.auth.getSession(),
           new Promise<{ data: { session: null }, error: Error }>((_, reject) =>
-            setTimeout(() => reject(new Error('Session check timed out')), 10000)
+            setTimeout(() => reject(new Error('Session check timed out')), 20000)
           )
         ]);
 
@@ -259,7 +259,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           email,
           password,
         }),
-        10000,
+        30000,
         'Login request timed out'
       );
 
@@ -393,7 +393,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             },
           },
         }),
-        10000,
+        30000,
         'Signup request timed out'
       );
 

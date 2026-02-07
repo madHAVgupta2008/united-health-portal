@@ -70,11 +70,11 @@ export const getBills = async (userId: string): Promise<Bill[]> => {
     hospitalName: bill.hospital_name,
     billDate: bill.bill_date,
     amount: bill.amount,
-    status: bill.status,
-    description: bill.description,
-    fileUrl: bill.file_url,
-    createdAt: bill.created_at,
-    updatedAt: bill.updated_at,
+    status: (bill.status as Bill['status']) || 'pending',
+    description: bill.description || '',
+    fileUrl: bill.file_url || undefined,
+    createdAt: bill.created_at || new Date().toISOString(),
+    updatedAt: bill.updated_at || new Date().toISOString(),
   }));
 };
 
@@ -163,7 +163,7 @@ export const addBill = async (
           // Update with AI extracted intelligence
           const updates: Record<string, string | number> = {
             status: 'pending', // Validated and ready for review
-            description: analysis.summary || data.description
+            description: analysis.summary || data.description || ''
           };
 
           if (analysis.extractedData.amount) updates.amount = analysis.extractedData.amount;
@@ -184,11 +184,11 @@ export const addBill = async (
               hospitalName: updatedData.hospital_name,
               billDate: updatedData.bill_date,
               amount: updatedData.amount,
-              status: updatedData.status,
-              description: updatedData.description,
-              fileUrl: updatedData.file_url,
-              createdAt: updatedData.created_at,
-              updatedAt: updatedData.updated_at,
+              status: (updatedData.status as Bill['status']) || 'pending',
+              description: updatedData.description || '',
+              fileUrl: updatedData.file_url || undefined,
+              createdAt: updatedData.created_at || new Date().toISOString(),
+              updatedAt: updatedData.updated_at || new Date().toISOString(),
             };
           }
         } else {
@@ -214,11 +214,11 @@ export const addBill = async (
       hospitalName: data.hospital_name,
       billDate: data.bill_date,
       amount: data.amount,
-      status: data.status, // Return original status if AI update logic didn't return early
-      description: data.description,
-      fileUrl: data.file_url,
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
+      status: (data.status as Bill['status']) || 'pending',
+      description: data.description || '',
+      fileUrl: data.file_url || undefined,
+      createdAt: data.created_at || new Date().toISOString(),
+      updatedAt: data.updated_at || new Date().toISOString(),
     };
   } catch (error: unknown) {
     console.error('Add bill error:', error);

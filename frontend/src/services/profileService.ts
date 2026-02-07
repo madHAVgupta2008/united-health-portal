@@ -39,15 +39,15 @@ export const getProfile = async (userId: string): Promise<Profile | null> => {
   return {
     id: data.id,
     email: data.email,
-    firstName: data.first_name,
-    lastName: data.last_name,
-    phone: data.phone,
-    address: data.address,
-    dateOfBirth: data.date_of_birth,
+    firstName: data.first_name || undefined,
+    lastName: data.last_name || undefined,
+    phone: data.phone || undefined,
+    address: data.address || undefined,
+    dateOfBirth: data.date_of_birth || undefined,
     memberId: data.member_id,
-    planType: data.plan_type,
-    createdAt: data.created_at,
-    updatedAt: data.updated_at,
+    planType: data.plan_type || undefined,
+    createdAt: data.created_at || new Date().toISOString(),
+    updatedAt: data.updated_at || new Date().toISOString(),
   };
 };
 
@@ -85,15 +85,15 @@ export const updateProfile = async (
   return {
     id: data.id,
     email: data.email,
-    firstName: data.first_name,
-    lastName: data.last_name,
-    phone: data.phone,
-    address: data.address,
-    dateOfBirth: data.date_of_birth,
+    firstName: data.first_name || undefined,
+    lastName: data.last_name || undefined,
+    phone: data.phone || undefined,
+    address: data.address || undefined,
+    dateOfBirth: data.date_of_birth || undefined,
     memberId: data.member_id,
-    planType: data.plan_type,
-    createdAt: data.created_at,
-    updatedAt: data.updated_at,
+    planType: data.plan_type || undefined,
+    createdAt: data.created_at || new Date().toISOString(),
+    updatedAt: data.updated_at || new Date().toISOString(),
   };
 };
 
@@ -128,14 +128,14 @@ export const createProfile = async (
   return {
     id: data.id,
     email: data.email,
-    firstName: data.first_name,
-    lastName: data.last_name,
-    phone: data.phone,
-    address: data.address,
-    dateOfBirth: data.date_of_birth,
+    firstName: data.first_name || undefined,
+    lastName: data.last_name || undefined,
+    phone: data.phone || undefined,
+    address: data.address || undefined,
+    dateOfBirth: data.date_of_birth || undefined,
     memberId: data.member_id,
-    planType: data.plan_type,
-    createdAt: data.created_at,
-    updatedAt: data.updated_at,
+    planType: data.plan_type || undefined,
+    createdAt: data.created_at || new Date().toISOString(),
+    updatedAt: data.updated_at || new Date().toISOString(),
   };
 };

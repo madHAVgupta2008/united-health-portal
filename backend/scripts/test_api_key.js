@@ -1,4 +1,17 @@
-const API_KEY = "AIzaSyBQjVtdAM7JHPRT2bxplrRrm92vkID1-9I";
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.join(__dirname, '../.env') });
+
+const API_KEY = process.env.VITE_GEMINI_API_KEY;
+
+if (!API_KEY) {
+    console.error("Error: VITE_GEMINI_API_KEY is not set in environment variables.");
+    process.exit(1);
+}
+
 const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}`;
 
 async function check() {

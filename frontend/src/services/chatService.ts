@@ -28,7 +28,7 @@ export const getChatHistory = async (userId: string): Promise<ChatMessage[]> => 
     userId: msg.user_id,
     content: msg.content,
     sender: msg.sender,
-    createdAt: msg.created_at,
+    createdAt: msg.created_at || new Date().toISOString(),
   }));
 };
 
@@ -60,7 +60,7 @@ export const saveChatMessage = async (
     userId: data.user_id,
     content: data.content,
     sender: data.sender,
-    createdAt: data.created_at,
+    createdAt: data.created_at || new Date().toISOString(),
   };
 };
 
@@ -103,7 +103,7 @@ export const subscribeToChatMessages = (
           userId: msg.user_id,
           content: msg.content,
           sender: msg.sender,
-          createdAt: msg.created_at,
+          createdAt: msg.created_at || new Date().toISOString(),
         });
       }
     )

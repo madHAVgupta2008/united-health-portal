@@ -71,10 +71,10 @@ export const getDocuments = async (userId: string): Promise<InsuranceDocument[]>
     fileType: doc.file_type,
     fileUrl: doc.file_url,
     fileSize: doc.file_size,
-    uploadDate: doc.upload_date,
-    status: doc.status,
-    createdAt: doc.created_at,
-    updatedAt: doc.updated_at,
+    uploadDate: doc.upload_date || new Date().toISOString(),
+    status: (doc.status as InsuranceDocument['status']) || 'pending',
+    createdAt: doc.created_at || new Date().toISOString(),
+    updatedAt: doc.updated_at || new Date().toISOString(),
   }));
 };
 
@@ -167,10 +167,10 @@ export const uploadDocument = async (
             fileType: updatedData.file_type,
             fileUrl: updatedData.file_url,
             fileSize: updatedData.file_size,
-            uploadDate: updatedData.upload_date,
-            status: updatedData.status,
-            createdAt: updatedData.created_at,
-            updatedAt: updatedData.updated_at,
+            uploadDate: updatedData.upload_date || new Date().toISOString(),
+            status: (updatedData.status as InsuranceDocument['status']) || 'pending',
+            createdAt: updatedData.created_at || new Date().toISOString(),
+            updatedAt: updatedData.updated_at || new Date().toISOString(),
           };
         }
       } else {
@@ -191,10 +191,10 @@ export const uploadDocument = async (
       fileType: data.file_type,
       fileUrl: data.file_url,
       fileSize: data.file_size,
-      uploadDate: data.upload_date,
-      status: data.status,
-      createdAt: data.created_at,
-      updatedAt: data.updated_at,
+      uploadDate: data.upload_date || new Date().toISOString(),
+      status: (data.status as InsuranceDocument['status']) || 'pending',
+      createdAt: data.created_at || new Date().toISOString(),
+      updatedAt: data.updated_at || new Date().toISOString(),
     };
   } catch (error: unknown) {
     console.error('Upload document error:', error);

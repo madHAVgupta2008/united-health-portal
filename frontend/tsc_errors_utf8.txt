@@ -1,0 +1,114 @@
+﻿src/components/ui/calendar.tsx(45,20): error TS6133: '_props' is declared but its value is never read.
+src/components/ui/calendar.tsx(46,21): error TS6133: '_props' is declared but its value is never read.
+src/contexts/DatabaseContext.tsx(86,9): error TS6133: 'convertChatMessage' is declared but its value is never read.
+src/contexts/DatabaseContext.tsx(230,9): error TS2322: Type '(docData: Omit<InsuranceFile, "id" | "uploadDate" | "status" | "fileSize">, file: File) => Promise<void>' is not assignable to type '(docData: Omit<InsuranceFile, "id" | "status" | "fileUrl" | "fileSize" | "uploadDate">, file: File) => Promise<void>'.
+  Types of parameters 'docData' and 'docData' are incompatible.
+    Property 'fileUrl' is missing in type 'Omit<InsuranceFile, "id" | "status" | "fileUrl" | "fileSize" | "uploadDate">' but required in type 'Omit<InsuranceFile, "id" | "status" | "fileSize" | "uploadDate">'.
+src/pages/AIChat.tsx(2,10): error TS6133: 'MessageCircle' is declared but its value is never read.
+src/pages/AIChat.tsx(38,13): error TS6133: 'event' is declared but its value is never read.
+src/pages/BillHistory.tsx(7,1): error TS6133: 'HospitalBill' is declared but its value is never read.
+src/pages/InsuranceHistory.tsx(2,53): error TS6133: 'Filter' is declared but its value is never read.
+src/pages/InsuranceHistory.tsx(7,1): error TS6133: 'InsuranceFile' is declared but its value is never read.
+src/services/billService.ts(67,3): error TS2322: Type '{ id: string; userId: string; hospitalName: string; billDate: string; amount: number; status: "pending" | "paid" | "processing" | "denied" | null; description: string | null; fileUrl: string | null; createdAt: string | null; updatedAt: string | null; }[]' is not assignable to type 'Bill[]'.
+  Type '{ id: string; userId: string; hospitalName: string; billDate: string; amount: number; status: "pending" | "paid" | "processing" | "denied" | null; description: string | null; fileUrl: string | null; createdAt: string | null; updatedAt: string | null; }' is not assignable to type 'Bill'.
+    Types of property 'status' are incompatible.
+      Type '"pending" | "paid" | "processing" | "denied" | null' is not assignable to type '"pending" | "paid" | "processing" | "denied"'.
+        Type 'null' is not assignable to type '"pending" | "paid" | "processing" | "denied"'.
+src/services/billService.ts(166,13): error TS2322: Type 'string | null' is not assignable to type 'string | number'.
+  Type 'null' is not assignable to type 'string | number'.
+src/services/billService.ts(187,15): error TS2322: Type '"pending" | "paid" | "processing" | "denied" | null' is not assignable to type '"pending" | "paid" | "processing" | "denied"'.
+  Type 'null' is not assignable to type '"pending" | "paid" | "processing" | "denied"'.
+src/services/billService.ts(188,15): error TS2322: Type 'string | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'.
+src/services/billService.ts(189,15): error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/services/billService.ts(190,15): error TS2322: Type 'string | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'.
+src/services/billService.ts(191,15): error TS2322: Type 'string | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'.
+src/services/billService.ts(217,7): error TS2322: Type '"pending" | "paid" | "processing" | "denied" | null' is not assignable to type '"pending" | "paid" | "processing" | "denied"'.
+  Type 'null' is not assignable to type '"pending" | "paid" | "processing" | "denied"'.
+src/services/billService.ts(218,7): error TS2322: Type 'string | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'.
+src/services/billService.ts(219,7): error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/services/billService.ts(220,7): error TS2322: Type 'string | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'.
+src/services/billService.ts(221,7): error TS2322: Type 'string | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'.
+src/services/chatService.ts(26,3): error TS2322: Type '{ id: string; userId: string; content: string; sender: "user" | "bot"; createdAt: string | null; }[]' is not assignable to type 'ChatMessage[]'.
+  Type '{ id: string; userId: string; content: string; sender: "user" | "bot"; createdAt: string | null; }' is not assignable to type 'ChatMessage'.
+    Types of property 'createdAt' are incompatible.
+      Type 'string | null' is not assignable to type 'string'.
+        Type 'null' is not assignable to type 'string'.
+src/services/chatService.ts(63,5): error TS2322: Type 'string | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'.
+src/services/insuranceService.ts(67,3): error TS2322: Type '{ id: string; userId: string; fileName: string; fileType: string; fileUrl: string; fileSize: number; uploadDate: string | null; status: "pending" | "approved" | "rejected" | null; createdAt: string | null; updatedAt: string | null; }[]' is not assignable to type 'InsuranceDocument[]'.
+  Type '{ id: string; userId: string; fileName: string; fileType: string; fileUrl: string; fileSize: number; uploadDate: string | null; status: "pending" | "approved" | "rejected" | null; createdAt: string | null; updatedAt: string | null; }' is not assignable to type 'InsuranceDocument'.
+    Types of property 'uploadDate' are incompatible.
+      Type 'string | null' is not assignable to type 'string'.
+        Type 'null' is not assignable to type 'string'.
+src/services/insuranceService.ts(170,13): error TS2322: Type 'string | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'.
+src/services/insuranceService.ts(171,13): error TS2322: Type '"pending" | "approved" | "rejected" | null' is not assignable to type '"pending" | "approved" | "rejected"'.
+  Type 'null' is not assignable to type '"pending" | "approved" | "rejected"'.
+src/services/insuranceService.ts(172,13): error TS2322: Type 'string | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'.
+src/services/insuranceService.ts(173,13): error TS2322: Type 'string | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'.
+src/services/insuranceService.ts(194,7): error TS2322: Type 'string | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'.
+src/services/insuranceService.ts(195,7): error TS2322: Type '"pending" | "approved" | "rejected" | null' is not assignable to type '"pending" | "approved" | "rejected"'.
+  Type 'null' is not assignable to type '"pending" | "approved" | "rejected"'.
+src/services/insuranceService.ts(196,7): error TS2322: Type 'string | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'.
+src/services/insuranceService.ts(197,7): error TS2322: Type 'string | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'.
+src/services/profileService.ts(42,5): error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/services/profileService.ts(43,5): error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/services/profileService.ts(44,5): error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/services/profileService.ts(45,5): error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/services/profileService.ts(46,5): error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/services/profileService.ts(48,5): error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/services/profileService.ts(49,5): error TS2322: Type 'string | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'.
+src/services/profileService.ts(50,5): error TS2322: Type 'string | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'.
+src/services/profileService.ts(88,5): error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/services/profileService.ts(89,5): error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/services/profileService.ts(90,5): error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/services/profileService.ts(91,5): error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/services/profileService.ts(92,5): error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/services/profileService.ts(94,5): error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/services/profileService.ts(95,5): error TS2322: Type 'string | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'.
+src/services/profileService.ts(96,5): error TS2322: Type 'string | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'.
+src/services/profileService.ts(131,5): error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/services/profileService.ts(132,5): error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/services/profileService.ts(133,5): error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/services/profileService.ts(134,5): error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/services/profileService.ts(135,5): error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/services/profileService.ts(137,5): error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+src/services/profileService.ts(138,5): error TS2322: Type 'string | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'.
+src/services/profileService.ts(139,5): error TS2322: Type 'string | null' is not assignable to type 'string'.
+  Type 'null' is not assignable to type 'string'.

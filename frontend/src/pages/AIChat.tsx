@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageCircle, Send, Bot, User, Sparkles, HelpCircle } from 'lucide-react';
+import { Send, Bot, User, Sparkles, HelpCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,7 +35,6 @@ const AIChat: React.FC = () => {
     setTimeout(() => {
       // We need to use the ref or a direct call, but since state update is async, 
       // we'll just manually trigger the send logic with the specific text
-      const event = { preventDefault: () => {} } as React.FormEvent;
       // This is a bit hacky, cleaner way is to separate send logic
       // But for now let's just update state and let user click or 
       // safer: refactor handleSend to accept an optional argument
