@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileText, Upload, CheckCircle, Info } from 'lucide-react';
+import { FileText, Upload, CheckCircle, Info, Sparkles } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -23,14 +23,20 @@ const InsuranceUpload: React.FC = () => {
   };
 
   const handleSubmit = async (): Promise<void> => {
-    if (!documentType || uploadedFiles.length === 0) {
+    // If no file, error
+    if (uploadedFiles.length === 0) {
       toast({
-        title: 'Missing Information',
-        description: 'Please select a document type and upload at least one file.',
+        title: 'Missing File',
+        description: 'Please upload an insurance document.',
         variant: 'destructive',
       });
       return;
     }
+
+    // If manual type selected, use it. Else default to generic for AI to refine.
+    const fileType = documentType
+      ? documentTypes.find(t => t.value === documentType)?.label || 'Document'
+      : 'Pending Analysis';
 
     setIsLoading(true);
     try {
@@ -38,14 +44,14 @@ const InsuranceUpload: React.FC = () => {
       const file = uploadedFiles[0];
       await uploadDocument({
         fileName: file.name,
-        fileType: documentTypes.find(t => t.value === documentType)?.label || 'Document',
+        fileType: fileType,
       }, file);
 
       toast({
         title: 'Documents Submitted',
         description: 'Your insurance documents have been uploaded successfully.',
       });
-      
+
       // Reset form
       setDocumentType('');
       setNotes('');
@@ -124,7 +130,7 @@ const InsuranceUpload: React.FC = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Upload className="w-5 h-5 text-primary" />
-                Upload Files
+                Upload Documents
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -133,13 +139,36 @@ const InsuranceUpload: React.FC = () => {
                 accept=".pdf,.jpg,.jpeg,.png"
                 multiple={true}
                 maxSize={10}
-                label="Upload Insurance Documents"
+                label="Upload Insurance Documents for Analysis"
               />
+              {uploadedFiles.length > 0 && (
+                <div className="mt-4 flex flex-col gap-2">
+                  <div className="flex items-center gap-2 text-sm text-green-600">
+                    <CheckCircle className="w-4 h-4" />
+                    <span>{uploadedFiles[0].name} ready for upload</span>
+                  </div>
+                  <Button
+                    onClick={handleSubmit}
+                    className="w-full h-12 btn-primary text-base font-semibold mt-2"
+                    disabled={isLoading}
+                  >
+                    {isLoading ? (
+                      <div className="w-6 h-6 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin mr-2" />
+                    ) : (
+                      <Sparkles className="w-5 h-5 mr-2" />
+                    )}
+                    {isLoading ? 'Analyzing & Processing...' : 'Auto-Process & Submit'}
+                  </Button>
+                  <p className="text-xs text-muted-foreground text-center">
+                    AI will automatically detect document type and details.
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
-          <Button 
-            onClick={handleSubmit} 
+          <Button
+            onClick={handleSubmit}
             className="w-full h-12 btn-primary text-base font-semibold"
             disabled={isLoading}
           >

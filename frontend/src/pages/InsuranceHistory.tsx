@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileText, Search, Download, Eye, Calendar, CheckCircle, Clock, XCircle } from 'lucide-react';
+import { FileText, Search, Download, Eye, Calendar, CheckCircle, Clock, XCircle, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,14 +8,36 @@ import { cn } from '@/lib/utils';
 import { useDatabase } from '@/contexts/DatabaseContext';
 import { supabase } from '@/integrations/supabase/client';
 
+import { useToast } from '@/hooks/use-toast';
+
 const InsuranceHistory: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
-  const { insuranceFiles } = useDatabase();
+  const { insuranceFiles, deleteDocument } = useDatabase();
+  const { toast } = useToast();
+
+  const handleDeleteDocument = async (docId: string) => {
+    if (window.confirm('Are you sure you want to delete this document? This action cannot be undone.')) {
+      try {
+        await deleteDocument(docId);
+        toast({
+          title: 'Document Deleted',
+          description: 'The document has been permanently deleted.',
+        });
+      } catch (error) {
+        console.error('Error deleting document:', error);
+        toast({
+          title: 'Delete Failed',
+          description: 'Failed to delete the document.',
+          variant: 'destructive',
+        });
+      }
+    }
+  };
 
   const filteredFiles = insuranceFiles.filter((file) => {
     const matchesSearch = file.fileName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         file.fileType.toLowerCase().includes(searchTerm.toLowerCase());
+      file.fileType.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = filterStatus === 'all' || file.status === filterStatus;
     return matchesSearch && matchesFilter;
   });
@@ -68,7 +90,7 @@ const InsuranceHistory: React.FC = () => {
             .createSignedUrl(decodedPath, 3600, {
               download: action === 'download' ? true : false,
             }); // 1 hour expiry
-            
+
           if (!error && data?.signedUrl) {
             finalUrl = data.signedUrl;
           } else {
@@ -76,7 +98,7 @@ const InsuranceHistory: React.FC = () => {
           }
         }
       }
-      
+
       if (action === 'download') {
         try {
           // Fetch the file as a blob to avoid page navigation
@@ -84,14 +106,14 @@ const InsuranceHistory: React.FC = () => {
           if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
           const blob = await response.blob();
           const blobUrl = window.URL.createObjectURL(blob);
-          
+
           const link = document.createElement('a');
           link.href = blobUrl;
           link.setAttribute('download', fileName || 'document');
           link.style.display = 'none';
           document.body.appendChild(link);
           link.click();
-          
+
           // Clean up after a short delay
           setTimeout(() => {
             document.body.removeChild(link);
@@ -104,7 +126,7 @@ const InsuranceHistory: React.FC = () => {
           iframe.style.display = 'none';
           iframe.src = finalUrl;
           document.body.appendChild(iframe);
-          
+
           // Clean up iframe after download starts
           setTimeout(() => {
             document.body.removeChild(iframe);
@@ -212,19 +234,27 @@ const InsuranceHistory: React.FC = () => {
                     {getStatusIcon(file.status)}
                     {file.status.charAt(0).toUpperCase() + file.status.slice(1)}
                   </Badge>
-                  <Button 
-                    variant="ghost" 
+                  <Button
+                    variant="ghost"
                     size="icon"
                     onClick={() => handleFileAction(file.fileUrl, file.fileName, 'view')}
                   >
                     <Eye className="w-5 h-5" />
                   </Button>
-                   <Button 
-                    variant="ghost" 
+                  <Button
+                    variant="ghost"
                     size="icon"
                     onClick={() => handleFileAction(file.fileUrl, file.fileName, 'download')}
                   >
                     <Download className="w-5 h-5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={() => handleDeleteDocument(file.id)}
+                  >
+                    <Trash2 className="w-5 h-5" />
                   </Button>
                 </div>
               </div>

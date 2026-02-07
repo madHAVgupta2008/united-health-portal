@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Receipt, Upload, CheckCircle, Info, DollarSign, Building2, Calendar } from 'lucide-react';
+import { Receipt, Upload, CheckCircle, Info, DollarSign, Building2, Calendar, Sparkles } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,27 +31,52 @@ const BillUpload: React.FC = () => {
   };
 
   const handleSubmit = async (): Promise<void> => {
-    if (!formData.hospitalName || !formData.billDate || !formData.amount || uploadedFiles.length === 0) {
-      toast({
-        title: 'Missing Information',
-        description: 'Please fill in all required fields and upload the bill.',
-        variant: 'destructive',
-      });
-      return;
+    // Validation: Require EITHER (all fields) OR (file + some fields optional)
+    // Actually for auto-process, simply requiring the file is enough if we trust the backend
+    // But let's check: if NO file, then ALL fields required.
+    // If FILE exists, we can allow empty fields and let AI fill them.
+
+    const isManualEntry = uploadedFiles.length === 0;
+
+    if (isManualEntry) {
+      if (!formData.hospitalName || !formData.billDate || !formData.amount) {
+        toast({
+          title: 'Missing Information',
+          description: 'Please fill in all required fields for manual entry.',
+          variant: 'destructive',
+        });
+        return;
+      }
+    } else {
+      // Auto-upload mode
+      if (uploadedFiles.length === 0) {
+        toast({
+          title: 'No File Selected',
+          description: 'Please select a bill to upload.',
+          variant: 'destructive',
+        });
+        return;
+      }
     }
 
     setIsLoading(true);
     try {
+      // Use "Pending AI Extraction" as placeholder if empty
+      const hospitalName = formData.hospitalName || "Pending AI Extraction";
+      const billDate = formData.billDate || new Date().toISOString().split('T')[0];
+      const amount = formData.amount ? parseFloat(formData.amount) : 0;
+      const description = formData.description || "Auto-uploaded bill for AI processing";
+
       await addBill({
-        hospitalName: formData.hospitalName,
-        billDate: formData.billDate,
-        amount: parseFloat(formData.amount),
-        description: formData.description,
+        hospitalName,
+        billDate,
+        amount,
+        description,
       }, uploadedFiles[0]); // Pass the first file
 
       toast({
         title: 'Bill Submitted',
-        description: 'Your hospital bill has been uploaded for processing.',
+        description: 'Your hospital bill has been uploaded and is being processed by AI.',
       });
 
       // Reset form
@@ -85,14 +110,55 @@ const BillUpload: React.FC = () => {
           <Card className="card-elevated">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
+                <Upload className="w-5 h-5 text-primary" />
+                Upload Bill Document
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <FileUpload
+                onFileSelect={handleFileSelect}
+                accept=".pdf,.jpg,.jpeg,.png"
+                multiple={true}
+                maxSize={10}
+                label="Upload Hospital Bill for Automatic Processing"
+              />
+              {uploadedFiles.length > 0 && (
+                <div className="mt-4 flex flex-col gap-2">
+                  <div className="flex items-center gap-2 text-sm text-green-600">
+                    <CheckCircle className="w-4 h-4" />
+                    <span>{uploadedFiles[0].name} ready for upload</span>
+                  </div>
+                  <Button
+                    onClick={handleSubmit}
+                    className="w-full h-12 btn-primary text-base font-semibold mt-2"
+                    disabled={isLoading}
+                  >
+                    {isLoading ? (
+                      <div className="w-6 h-6 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin mr-2" />
+                    ) : (
+                      <Sparkles className="w-5 h-5 mr-2" />
+                    )}
+                    {isLoading ? 'Processing with AI...' : 'Auto-Process & Submit Bill'}
+                  </Button>
+                  <p className="text-xs text-muted-foreground text-center">
+                    AI will automatically extract details from your bill.
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="card-elevated">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
                 <Receipt className="w-5 h-5 text-primary" />
-                Bill Information
+                Manual Entry (Optional)
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="hospitalName">Hospital/Provider Name *</Label>
+                  <Label htmlFor="hospitalName">Hospital/Provider Name</Label>
                   <div className="relative">
                     <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                     <Input
@@ -106,7 +172,7 @@ const BillUpload: React.FC = () => {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="billDate">Bill Date *</Label>
+                  <Label htmlFor="billDate">Bill Date</Label>
                   <div className="relative">
                     <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                     <Input
@@ -122,7 +188,7 @@ const BillUpload: React.FC = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="amount">Bill Amount *</Label>
+                <Label htmlFor="amount">Bill Amount</Label>
                 <div className="relative">
                   <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                   <Input
@@ -148,39 +214,24 @@ const BillUpload: React.FC = () => {
                   className="min-h-[100px] input-focus"
                 />
               </div>
+
+              {/* Only show manual submit if no file is selected, or as secondary option */}
+              {uploadedFiles.length === 0 && (
+                <Button
+                  onClick={handleSubmit}
+                  className="w-full h-12 btn-primary text-base font-semibold"
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <div className="w-6 h-6 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin mr-2" />
+                  ) : (
+                    <CheckCircle className="w-5 h-5 mr-2" />
+                  )}
+                  {isLoading ? 'Processing...' : 'Submit Manual Entry'}
+                </Button>
+              )}
             </CardContent>
           </Card>
-
-          <Card className="card-elevated">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Upload className="w-5 h-5 text-primary" />
-                Upload Bill Document
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <FileUpload
-                onFileSelect={handleFileSelect}
-                accept=".pdf,.jpg,.jpeg,.png"
-                multiple={true}
-                maxSize={10}
-                label="Upload Hospital Bill"
-              />
-            </CardContent>
-          </Card>
-
-          <Button 
-            onClick={handleSubmit} 
-            className="w-full h-12 btn-primary text-base font-semibold"
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <div className="w-6 h-6 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin mr-2" />
-            ) : (
-              <CheckCircle className="w-5 h-5 mr-2" />
-            )}
-            {isLoading ? 'Processing with AI...' : 'Submit Bill'}
-          </Button>
         </div>
 
         {/* Info Sidebar */}

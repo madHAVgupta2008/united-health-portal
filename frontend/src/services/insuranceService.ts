@@ -124,7 +124,7 @@ export const uploadDocument = async (
             file_type: docData.fileType,
             file_url: urlData.publicUrl,
             file_size: file.size,
-            status: 'pending' 
+            status: 'pending'
           })
           .select()
           .single();
@@ -143,22 +143,52 @@ export const uploadDocument = async (
 
     // AI Analysis Integration (non-blocking)
     try {
+      // Lazy load to avoid circular dependencies if any
       const { analyzeDocument } = await import('./ai');
       const analysis = await withTimeout(
         analyzeDocument(file),
-        20000,
+        25000, // Increased timeout for analysis
         'AI analysis timed out'
       );
-      
+
       if (analysis.isValid) {
-        // Auto-approve valid insurance docs
+        // Construct a smart filename and type based on analysis
+        // e.g. "UHC Medical Policy - 12345.pdf"
+        let smartFileName = data.file_name;
+        let smartFileType = data.file_type;
+
+        if (analysis.extractedData) {
+          const { provider, coverageType, policyNumber, documentType } = analysis.extractedData;
+
+          // Generate smart name parts
+          const parts = [];
+          if (provider) parts.push(provider);
+          if (coverageType) parts.push(coverageType);
+          if (documentType) parts.push(documentType);
+
+          if (parts.length > 0) {
+            // Keep original extension
+            const ext = data.file_name.split('.').pop();
+            smartFileName = `${parts.join(' ')}${policyNumber ? ` - ${policyNumber}` : ''}.${ext}`;
+          }
+
+          if (documentType) {
+            smartFileType = documentType;
+          }
+        }
+
+        // Auto-approve and update metadata
         const { data: updatedData } = await supabase
           .from('insurance_documents')
-          .update({ status: 'approved' })
+          .update({
+            status: 'approved',
+            file_name: smartFileName,
+            file_type: smartFileType
+          })
           .eq('id', data.id)
           .select()
           .single();
-          
+
         if (updatedData) {
           return {
             id: updatedData.id,
@@ -198,10 +228,10 @@ export const uploadDocument = async (
     };
   } catch (error: unknown) {
     console.error('Upload document error:', error);
-    
+
     // Type guard for error messages
     const errorMessage = error instanceof Error ? error.message : typeof error === 'string' ? error : String(error);
-    
+
     // Provide user-friendly error messages
     if (errorMessage.includes('timed out')) {
       throw new Error('Upload timed out. Please check your connection and try again.');

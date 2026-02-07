@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { useAuth } from './AuthContext';
-import { getBills, addBill as addBillService, Bill } from '@/services/billService';
-import { getDocuments, uploadDocument as uploadDocumentService, InsuranceDocument } from '@/services/insuranceService';
-import { getChatHistory, saveChatMessage, ChatMessage as ChatMsg } from '@/services/chatService';
+import { getBills, addBill as addBillService, updateBillStatus as updateBillStatusService, deleteBill as deleteBillService, Bill } from '@/services/billService';
+import { getDocuments, uploadDocument as uploadDocumentService, deleteDocument as deleteDocumentService, InsuranceDocument } from '@/services/insuranceService';
+import { getChatHistory, saveChatMessage, clearChatHistory as clearChatHistoryService, ChatMessage as ChatMsg } from '@/services/chatService';
 
 interface HospitalBill {
   id: string;
@@ -39,6 +39,10 @@ interface DatabaseContextType {
   addBill: (billData: Omit<HospitalBill, 'id' | 'status' | 'fileUrl'>, file?: File) => Promise<void>;
   uploadDocument: (docData: Omit<InsuranceFile, 'id' | 'uploadDate' | 'status' | 'fileSize' | 'fileUrl'>, file: File) => Promise<void>;
   addChatMessage: (message: ChatMessage) => Promise<void>;
+  clearChat: () => Promise<void>;
+  updateBillStatus: (billId: string, status: 'pending' | 'paid' | 'processing' | 'denied') => Promise<void>;
+  deleteBill: (billId: string) => Promise<void>;
+  deleteDocument: (docId: string) => Promise<void>;
   refreshData: () => Promise<void>;
 }
 
@@ -102,7 +106,7 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
 
     try {
       setIsLoading(true);
-      
+
       // Supabase mode only
       const [billsData, docsData, chatData] = await Promise.all([
         getBills(user.id),
@@ -210,20 +214,55 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
     }
   };
 
+  const clearChat = async (): Promise<void> => {
+    if (!user) throw new Error('User not authenticated');
+
+    try {
+      setChatHistory([]);
+      // Supabase mode only
+      await clearChatHistoryService(user.id);
+    } catch (error) {
+      console.error('Error clearing chat history:', error);
+      // We can't easily revert a clear operation, so just refresh
+      await loadData();
+      throw error;
+    }
+  };
+
   const refreshData = async (): Promise<void> => {
     await loadData();
   };
 
+  const updateBillStatus = async (billId: string, status: 'pending' | 'paid' | 'processing' | 'denied'): Promise<void> => {
+    await updateBillStatusService(billId, status);
+    setBills(prev => prev.map(bill => bill.id === billId ? { ...bill, status } : bill));
+  };
+
+  const deleteBill = async (billId: string): Promise<void> => {
+    await deleteBillService(billId);
+    setBills(prev => prev.filter(bill => bill.id !== billId));
+  };
+
+  const deleteDocument = async (docId: string): Promise<void> => {
+    await deleteDocumentService(docId);
+    setInsuranceFiles(prev => prev.filter(doc => doc.id !== docId));
+  };
+
+
   return (
-    <DatabaseContext.Provider 
-      value={{ 
-        bills, 
-        insuranceFiles, 
-        chatHistory, 
+    <DatabaseContext.Provider
+      value={{
+        bills,
+        insuranceFiles,
+        chatHistory,
         isLoading,
-        addBill, 
-        uploadDocument, 
+        addBill,
+        uploadDocument,
         addChatMessage,
+        clearChat,
+        updateBillStatus,
+        deleteBill,
+        deleteDocument,
         refreshData,
       }}
     >

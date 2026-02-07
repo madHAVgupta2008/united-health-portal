@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Sparkles, HelpCircle } from 'lucide-react';
+import { Send, Bot, User, Sparkles, HelpCircle, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,9 +7,21 @@ import { ChatMessage } from '@/types';
 import { cn } from '@/lib/utils';
 import { useDatabase } from '@/contexts/DatabaseContext';
 import { generateAIResponse } from '@/services/ai';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { MessageFormatter } from '@/components/ui/MessageFormatter';
 
 const AIChat: React.FC = () => {
-  const { chatHistory: messages, addChatMessage } = useDatabase();
+  const { chatHistory: messages, addChatMessage, clearChat } = useDatabase();
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -38,62 +50,67 @@ const AIChat: React.FC = () => {
       // This is a bit hacky, cleaner way is to separate send logic
       // But for now let's just update state and let user click or 
       // safer: refactor handleSend to accept an optional argument
-      handleSend(question); 
+      handleSend(question);
     }, 0);
   };
-  
+
   // Refactored handleSend to accept optional message
   const handleSend = async (messageOverride?: string) => {
     const textToSend = messageOverride || inputValue;
     if (!textToSend.trim() || isTyping) return;
 
-    if (!messageOverride) setInputValue(''); // Clear input if typed manually
-    
-    const userMessage: ChatMessage = {
+    // Add user message
+    const newMessage: ChatMessage = {
       id: Date.now().toString(),
       content: textToSend,
       sender: 'user',
       timestamp: new Date(),
     };
 
+    // Use Context function to save AND update state
+    addChatMessage(newMessage);
+
+    // Clear input if it was from inputValue
+    if (!messageOverride) setInputValue('');
+    setIsTyping(true);
+
     try {
-      // Add user message
-      await addChatMessage(userMessage);
-      setIsTyping(true);
+      // Generate formatted history for context
+      const historyContext = messages
+        .slice(-5) // Last 5 messages for context
+        .map(m => `${m.sender === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+        .join('\n');
 
-      // Prepare context from recent messages (last 5)
-      const context = messages.slice(-5).map(m => `${m.sender === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n');
+      const response = await generateAIResponse(textToSend, historyContext);
 
-      try {
-        const response = await generateAIResponse(textToSend, context);
+      const botMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        content: response,
+        sender: 'bot',
+        timestamp: new Date(),
+      };
 
-        const botMessage: ChatMessage = {
-          id: (Date.now() + 1).toString(),
-          content: response,
-          sender: 'bot',
-          timestamp: new Date(),
-        };
-
-        await addChatMessage(botMessage);
-      } catch (aiError) {
-        console.error('AI Response Error:', aiError);
-        // Still show an error message to the user
-        const errorMessage: ChatMessage = {
-          id: (Date.now() + 1).toString(),
-          content: "I'm sorry, I'm having trouble responding right now. Please try again in a moment.",
-          sender: 'bot',
-          timestamp: new Date(),
-        };
-        await addChatMessage(errorMessage);
-      }
+      addChatMessage(botMessage);
     } catch (error) {
-      console.error('Chat error:', error);
-      // If we couldn't save the user message, show an error
-      alert('Failed to send message. Please check your connection and try again.');
-      // Restore the input if it was typed
-      if (!messageOverride) setInputValue(textToSend);
+      console.error('Error generating response:', error);
+      const errorMessage: ChatMessage = {
+        id: (Date.now() + 1).toString(),
+        content: "I'm sorry, I encountered an error. Please try again.",
+        sender: 'bot',
+        timestamp: new Date(),
+      };
+      addChatMessage(errorMessage);
     } finally {
       setIsTyping(false);
+    }
+  };
+
+  const handleClearChat = async () => {
+    try {
+      await clearChat();
+    } catch (error) {
+      console.error('Failed to clear chat:', error);
+      alert('Failed to clear chat history.');
     }
   };
 
@@ -109,7 +126,7 @@ const AIChat: React.FC = () => {
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-4 gap-6 min-h-0">
         {/* Chat Window */}
         <Card className="card-elevated lg:col-span-3 flex flex-col min-h-0">
-          <CardHeader className="border-b border-border shrink-0">
+          <CardHeader className="border-b border-border shrink-0 flex flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2">
               <div className="w-10 h-10 rounded-full gradient-primary flex items-center justify-center">
                 <Bot className="w-5 h-5 text-primary-foreground" />
@@ -119,57 +136,84 @@ const AIChat: React.FC = () => {
                 <p className="text-sm text-muted-foreground font-normal">Powered by AI</p>
               </div>
             </CardTitle>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive" title="Clear Chat">
+                  <Trash2 className="w-5 h-5" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Clear Chat History?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently remove all your chat messages. This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleClearChat} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    Clear Chat
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </CardHeader>
           <CardContent className="flex-1 flex flex-col p-0 min-h-0">
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={cn(
-                    'flex gap-3 animate-slide-up',
-                    message.sender === 'user' ? 'flex-row-reverse' : ''
-                  )}
-                >
+            <div className="flex-1 overflow-y-auto p-6 space-y-4 flex flex-col">
+              {messages.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-center p-6 text-muted-foreground">
+                  <Bot className="w-12 h-12 mb-4 opacity-20" />
+                  <p className="text-lg font-medium">No messages yet</p>
+                  <p className="text-sm">Start a conversation by asking a question or selecting a quick topic.</p>
+                </div>
+              ) : (
+                messages.map((message) => (
                   <div
+                    key={message.id || message.timestamp.toString()} // Prefer stable ID
                     className={cn(
-                      'w-9 h-9 rounded-full flex items-center justify-center shrink-0',
-                      message.sender === 'user'
-                        ? 'bg-primary'
-                        : 'gradient-primary'
+                      "flex gap-3 max-w-[85%] animate-in fade-in slide-in-from-bottom-2 duration-300",
+                      message.sender === 'user' ? "self-end flex-row-reverse" : "self-start"
                     )}
                   >
-                    {message.sender === 'user' ? (
-                      <User className="w-5 h-5 text-primary-foreground" />
-                    ) : (
-                      <Bot className="w-5 h-5 text-primary-foreground" />
-                    )}
-                  </div>
-                  <div
-                    className={cn(
-                      'max-w-[80%] rounded-2xl px-4 py-3',
+                    {/* Avatar */}
+                    <div className={cn(
+                      "w-8 h-8 rounded-full flex items-center justify-center shadow-sm shrink-0",
                       message.sender === 'user'
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-secondary text-foreground'
-                    )}
-                  >
-                    <p className="whitespace-pre-line">{message.content}</p>
-                    <p
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-secondary text-secondary-foreground border border-border/50"
+                    )}>
+                      {message.sender === 'user' ? <User className="w-4 h-4" /> : <Bot className="w-5 h-5" />}
+                    </div>
+
+                    {/* Message Bubble */}
+                    <div
                       className={cn(
-                        'text-xs mt-2',
+                        "rounded-2xl px-5 py-3 shadow-sm",
                         message.sender === 'user'
-                          ? 'text-primary-foreground/70'
-                          : 'text-muted-foreground'
+                          ? "bg-primary text-primary-foreground rounded-tr-none"
+                          : "bg-card border border-border/50 text-card-foreground rounded-tl-none"
                       )}
                     >
-                      {message.timestamp.toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </p>
+                      {/* Content with formatter */}
+                      <MessageFormatter
+                        content={message.content}
+                        sender={message.sender as 'user' | 'bot'}
+                      />
+
+                      {/* Timestamp if available (optional) */}
+                      {message.timestamp && (
+                        <div className={cn(
+                          "text-[10px] mt-1 opacity-60",
+                          message.sender === 'user' ? "text-right" : "text-left"
+                        )}>
+                          {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
 
               {isTyping && (
                 <div className="flex gap-3">

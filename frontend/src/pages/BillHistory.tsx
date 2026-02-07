@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Receipt, Search, Download, Eye, Calendar, DollarSign, Building2, CheckCircle, Clock, XCircle, CreditCard } from 'lucide-react';
+import { Receipt, Search, Download, Eye, Calendar, DollarSign, Building2, CheckCircle, Clock, XCircle, CreditCard, Trash2, Sparkles } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,14 +8,117 @@ import { cn } from '@/lib/utils';
 import { useDatabase } from '@/contexts/DatabaseContext';
 import { supabase } from '@/integrations/supabase/client';
 
+import { useToast } from '@/hooks/use-toast';
+import { analyzeBillDetails, BillAnalysisResult } from '@/services/ai';
+import BillAnalysisModal from '@/components/bill/BillAnalysisModal';
+
 const BillHistory: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
-  const { bills: hospitalBills } = useDatabase();
+  const { bills: hospitalBills, updateBillStatus, deleteBill } = useDatabase();
+  const { toast } = useToast();
+
+  const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState<BillAnalysisResult | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  const handleAnalyzeBill = async (billUrl?: string) => {
+    if (!billUrl) {
+      toast({
+        title: "No File",
+        description: "This bill does not have an attached file to analyze.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      setIsAnalyzing(true);
+      setAnalysisResult(null);
+      setIsAnalysisModalOpen(true);
+
+      // fetch file blob
+      let finalUrl = billUrl;
+      if (billUrl.includes('supabase.co') && billUrl.includes('hospital-bills')) {
+        const path = billUrl.split('hospital-bills/')[1]?.split('?')[0];
+        if (path) {
+          const decodedPath = decodeURIComponent(path);
+          const { data } = await supabase.storage
+            .from('hospital-bills')
+            .createSignedUrl(decodedPath, 3600);
+          if (data?.signedUrl) finalUrl = data.signedUrl;
+        }
+      }
+
+      const response = await fetch(finalUrl);
+      const blob = await response.blob();
+      const file = new File([blob], "bill.jpg", { type: blob.type });
+
+      const result = await analyzeBillDetails(file);
+
+      if (result) {
+        setAnalysisResult(result);
+      } else {
+        toast({
+          title: "Analysis Failed",
+          description: "Could not analyze the document structure.",
+          variant: "destructive"
+        });
+        setIsAnalysisModalOpen(false);
+      }
+
+    } catch (error) {
+      console.error("Analysis error:", error);
+      toast({
+        title: "Error",
+        description: "Failed to process the bill file.",
+        variant: "destructive"
+      });
+      setIsAnalysisModalOpen(false);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const handleMarkAsPaid = async (billId: string) => {
+    try {
+      await updateBillStatus(billId, 'paid');
+      toast({
+        title: 'Bill Updated',
+        description: 'The bill has been marked as paid.',
+      });
+    } catch (error) {
+      console.error('Error updating bill:', error);
+      toast({
+        title: 'Update Failed',
+        description: 'Failed to update bill status.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleDeleteBill = async (billId: string) => {
+    if (window.confirm('Are you sure you want to delete this bill? This action cannot be undone.')) {
+      try {
+        await deleteBill(billId);
+        toast({
+          title: 'Bill Deleted',
+          description: 'The bill has been permanently deleted.',
+        });
+      } catch (error) {
+        console.error('Error deleting bill:', error);
+        toast({
+          title: 'Delete Failed',
+          description: 'Failed to delete the bill.',
+          variant: 'destructive',
+        });
+      }
+    }
+  };
 
   const filteredBills = hospitalBills.filter((bill) => {
     const matchesSearch = bill.hospitalName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         bill.description.toLowerCase().includes(searchTerm.toLowerCase());
+      bill.description.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = filterStatus === 'all' || bill.status === filterStatus;
     return matchesSearch && matchesFilter;
   });
@@ -80,7 +183,7 @@ const BillHistory: React.FC = () => {
             .createSignedUrl(decodedPath, 3600, {
               download: action === 'download' ? true : false,
             }); // 1 hour expiry
-            
+
           if (!error && data?.signedUrl) {
             finalUrl = data.signedUrl;
           } else {
@@ -88,7 +191,7 @@ const BillHistory: React.FC = () => {
           }
         }
       }
-      
+
       if (action === 'download') {
         try {
           // Fetch the file as a blob to avoid page navigation
@@ -96,14 +199,14 @@ const BillHistory: React.FC = () => {
           if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
           const blob = await response.blob();
           const blobUrl = window.URL.createObjectURL(blob);
-          
+
           const link = document.createElement('a');
           link.href = blobUrl;
           link.setAttribute('download', fileName || 'bill');
           link.style.display = 'none';
           document.body.appendChild(link);
           link.click();
-          
+
           // Clean up after a short delay
           setTimeout(() => {
             document.body.removeChild(link);
@@ -116,7 +219,7 @@ const BillHistory: React.FC = () => {
           iframe.style.display = 'none';
           iframe.src = finalUrl;
           document.body.appendChild(iframe);
-          
+
           // Clean up iframe after download starts
           setTimeout(() => {
             document.body.removeChild(iframe);
@@ -222,27 +325,59 @@ const BillHistory: React.FC = () => {
                       {bill.amount.toLocaleString()}
                     </p>
                   </div>
-                  <Badge
-                    className={cn('flex items-center gap-1', getStatusColor(bill.status))}
-                    variant="outline"
-                  >
-                    {getStatusIcon(bill.status)}
-                    {bill.status.charAt(0).toUpperCase() + bill.status.slice(1)}
-                  </Badge>
-                  <Button 
-                    variant="ghost" 
-                    size="icon"
-                    onClick={() => handleFileAction(bill.fileUrl, bill.hospitalName, 'view')}
-                  >
-                    <Eye className="w-5 h-5" />
-                  </Button>
-                   <Button 
-                    variant="ghost" 
-                    size="icon"
-                    onClick={() => handleFileAction(bill.fileUrl, bill.hospitalName, 'download')}
-                  >
-                    <Download className="w-5 h-5" />
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      className={cn('flex items-center gap-1', getStatusColor(bill.status))}
+                      variant="outline"
+                    >
+                      {getStatusIcon(bill.status)}
+                      {bill.status.charAt(0).toUpperCase() + bill.status.slice(1)}
+                    </Badge>
+
+                    {bill.status === 'pending' && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 text-green-600 border-green-200 hover:bg-green-50 hover:text-green-700 hover:border-green-300"
+                        onClick={() => handleMarkAsPaid(bill.id)}
+                      >
+                        <CheckCircle className="w-4 h-4 mr-1" />
+                        Mark Paid
+                      </Button>
+                    )}
+
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleFileAction(bill.fileUrl, bill.hospitalName, 'view')}
+                    >
+                      <Eye className="w-5 h-5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-primary hover:text-primary hover:bg-primary/10"
+                      onClick={() => handleAnalyzeBill(bill.fileUrl)}
+                      title="Analyze with AI"
+                    >
+                      <Sparkles className="w-5 h-5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleFileAction(bill.fileUrl, bill.hospitalName, 'download')}
+                    >
+                      <Download className="w-5 h-5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={() => handleDeleteBill(bill.id)}
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -256,6 +391,13 @@ const BillHistory: React.FC = () => {
           </div>
         </CardContent>
       </Card>
+
+      <BillAnalysisModal
+        isOpen={isAnalysisModalOpen}
+        onClose={() => setIsAnalysisModalOpen(false)}
+        result={analysisResult}
+        isLoading={isAnalyzing}
+      />
     </div>
   );
 };
