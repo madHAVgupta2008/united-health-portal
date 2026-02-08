@@ -20,7 +20,7 @@ serve(async (req) => {
     const { prompt, history, image } = await req.json()
 
     // Use REST API directly instead of SDK for better compatibility
-    const model = 'gemini-2.5-flash'
+    const model = 'gemini-1.5-flash'
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`
 
     let requestBody: any

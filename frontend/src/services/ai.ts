@@ -1,14 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { supabase } from '@/integrations/supabase/client';
-
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-
-if (!API_KEY) {
-  console.error("VITE_GEMINI_API_KEY is not set in the environment variables.");
-}
-
-const genAI = new GoogleGenerativeAI(API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
 const fetchUserContext = async () => {
   try {
@@ -67,12 +57,10 @@ export const analyzeDocument = async (file: File): Promise<{
   };
 }> => {
   try {
-    // Convert file to base64
     const base64Data = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
       reader.onloadend = () => {
         const base64String = reader.result as string;
-        // Remove data URL prefix (e.g., "data:image/jpeg;base64,")
         const base64 = base64String.split(',')[1];
         resolve(base64);
       };
@@ -101,20 +89,24 @@ export const analyzeDocument = async (file: File): Promise<{
       }
     `;
 
-    const result = await model.generateContent([
-      prompt,
-      {
-        inlineData: {
-          data: base64Data,
-          mimeType: file.type
+    const { data, error } = await supabase.functions.invoke('gemini-chat', {
+      body: {
+        prompt,
+        image: {
+          inlineData: {
+            data: base64Data,
+            mimeType: file.type
+          }
         }
       }
-    ]);
-    const response = await result.response;
-    const text = response.text();
+    });
+
+    if (error) throw error;
+
+    let text = data.text;
+    if (!text) throw new Error("No response from AI");
 
     try {
-      // Clean up markdown if present
       const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
       return JSON.parse(cleanJson);
     } catch (e) {
@@ -125,7 +117,6 @@ export const analyzeDocument = async (file: File): Promise<{
         summary: "AI analysis completed but returned invalid format."
       };
     }
-
 
   } catch (error) {
     console.error("AI Analysis Failed:", error);
@@ -144,28 +135,25 @@ export const generateAIResponse = async (userMessage: string, chatHistory: strin
 
   try {
     const userContext = await fetchUserContext();
+    
+    // We send the context as part of the history or prompt to the backend
+    // Since the backend 'gemini-chat' function handles 'history' and 'prompt',
+    // We will prepend the user context to the history for the AI to see.
+    const fullHistory = `${userContext}\n\n${chatHistory}`;
 
-    const systemPrompt = `You are a helpful AI Health Assistant for United Health Financial Portal. 
-Your role is to help users understand their healthcare coverage, explain medical bills, answer insurance questions, and provide general health information.
-You have access to the user's personal context (bills, insurance, profile) which is provided below. USE THIS CONTEXT to answer their questions specifically.
-Be friendly, helpful, and concise.
+    const { data, error } = await supabase.functions.invoke('gemini-chat', {
+      body: {
+        prompt: userMessage,
+        history: fullHistory
+      }
+    });
 
-${userContext}
-
-Now respond to the user's message.`;
-
-    // Construct a prompt that includes history context manually since we aren't maintaining stateful chat here
-    const fullPrompt = chatHistory
-      ? `${systemPrompt}\n\nPrevious conversation:\n${chatHistory}\n\nUser: ${userMessage}`
-      : `${systemPrompt}\n\nUser: ${userMessage}`;
-
-    const result = await model.generateContent(fullPrompt);
-    const response = await result.response;
-    return response.text();
+    if (error) throw error;
+    return data.text || "Sorry, I couldn't generate a response.";
 
   } catch (error) {
     console.error("Gemini API Error:", error);
-    return "I'm currently unable to access the AI service. Please ensure the API key is configured correctly.";
+    return "I'm currently unable to access the AI service. Please ensure the API key is configured correctly in the backend.";
   }
 };
 
@@ -242,18 +230,23 @@ export const analyzeBillDetails = async (file: File): Promise<BillAnalysisResult
       }
     `;
 
-    const result = await model.generateContent([
-      prompt,
-      {
-        inlineData: {
-          data: base64Data,
-          mimeType: file.type
+    const { data, error } = await supabase.functions.invoke('gemini-chat', {
+      body: {
+        prompt,
+        image: {
+          inlineData: {
+            data: base64Data,
+            mimeType: file.type
+          }
         }
       }
-    ]);
+    });
 
-    const response = await result.response;
-    const text = response.text();
+    if (error) throw error;
+
+    let text = data.text;
+    if (!text) throw new Error("No response from AI");
+
     const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
     return JSON.parse(cleanJson);
 
@@ -343,18 +336,23 @@ export const analyzeInsuranceDetails = async (file: File): Promise<InsuranceAnal
       }
     `;
 
-    const result = await model.generateContent([
-      prompt,
-      {
-        inlineData: {
-          data: base64Data,
-          mimeType: file.type
+    const { data, error } = await supabase.functions.invoke('gemini-chat', {
+      body: {
+        prompt,
+        image: {
+          inlineData: {
+            data: base64Data,
+            mimeType: file.type
+          }
         }
       }
-    ]);
+    });
 
-    const response = await result.response;
-    const text = response.text();
+    if (error) throw error;
+    
+    let text = data.text;
+    if (!text) throw new Error("No response from AI");
+
     const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
     return JSON.parse(cleanJson);
 
