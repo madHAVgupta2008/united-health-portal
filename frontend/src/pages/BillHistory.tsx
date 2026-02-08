@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Receipt, Search, Download, Eye, Calendar, DollarSign, Building2, CheckCircle, Clock, XCircle, CreditCard, Trash2, Sparkles } from 'lucide-react';
+import { Receipt, Search, Download, Eye, Calendar, DollarSign, Building2, CheckCircle, Clock, XCircle, Trash2, Sparkles, MoreVertical } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,28 +7,38 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useDatabase, Bill } from '@/contexts/DatabaseContext';
 import { supabase } from '@/integrations/supabase/client';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 import { useToast } from '@/hooks/use-toast';
 import { analyzeBillDetails, BillAnalysisResult } from '@/services/ai';
 import BillAnalysisModal from '@/components/bill/BillAnalysisModal';
-import PaymentModal from '@/components/bill/PaymentModal';
 
 const BillHistory: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
-  const { bills: hospitalBills, updateBillStatus, deleteBill } = useDatabase();
+  const { bills: hospitalBills, updateBillStatus, updateBillAnalysis, deleteBill } = useDatabase();
   const { toast } = useToast();
 
   const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<BillAnalysisResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-  // Payment Modal State
-  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [selectedBillForPayment, setSelectedBillForPayment] = useState<Bill | null>(null);
+  const handleAnalyzeBill = async (bill: any) => {
+    // If analysis already exists, use it
+    if (bill.analysisResult) {
+      setAnalysisResult(bill.analysisResult);
+      setIsAnalysisModalOpen(true);
+      return;
+    }
 
-  const handleAnalyzeBill = async (billUrl?: string) => {
-    if (!billUrl) {
+    if (!bill.fileUrl) {
       toast({
         title: "No File",
         description: "This bill does not have an attached file to analyze.",
@@ -43,9 +53,9 @@ const BillHistory: React.FC = () => {
       setIsAnalysisModalOpen(true);
 
       // fetch file blob
-      let finalUrl = billUrl;
-      if (billUrl.includes('supabase.co') && billUrl.includes('hospital-bills')) {
-        const path = billUrl.split('hospital-bills/')[1]?.split('?')[0];
+      let finalUrl = bill.fileUrl;
+      if (bill.fileUrl.includes('supabase.co') && bill.fileUrl.includes('hospital-bills')) {
+        const path = bill.fileUrl.split('hospital-bills/')[1]?.split('?')[0];
         if (path) {
           const decodedPath = decodeURIComponent(path);
           const { data } = await supabase.storage
@@ -63,6 +73,20 @@ const BillHistory: React.FC = () => {
 
       if (result) {
         setAnalysisResult(result);
+
+        // Save the analysis result to the database for future use
+        const { error } = await supabase
+          .from('hospital_bills')
+          .update({ analysis_result: result } as any)
+          .eq('id', bill.id);
+
+        if (error) {
+          console.error("Failed to save analysis result:", error);
+        } else {
+          // Update the local bill object in context
+          updateBillAnalysis(bill.id, result);
+        }
+
       } else {
         toast({
           title: "Analysis Failed",
@@ -85,25 +109,18 @@ const BillHistory: React.FC = () => {
     }
   };
 
-  const initiatePayment = (bill: any) => {
-      setSelectedBillForPayment(bill);
-      setIsPaymentModalOpen(true);
-  };
-
-  const handlePaymentComplete = async (billId: string) => {
+  const handleChangeStatus = async (billId: string, newStatus: 'paid' | 'pending' | 'denied') => {
     try {
-      await updateBillStatus(billId, 'paid');
+      await updateBillStatus(billId, newStatus);
       toast({
-        title: 'Payment Successful',
-        description: 'Thank you! Your bill has been marked as paid.',
+        title: 'Status Updated',
+        description: `Bill marked as ${newStatus}.`,
       });
-      setIsPaymentModalOpen(false);
-      setSelectedBillForPayment(null);
     } catch (error) {
-      console.error('Error updating bill:', error);
+      console.error('Error updating status:', error);
       toast({
         title: 'Update Failed',
-        description: 'Failed to update bill status after payment.',
+        description: 'Failed to update bill status.',
         variant: 'destructive',
       });
     }
@@ -172,7 +189,7 @@ const BillHistory: React.FC = () => {
     { label: 'Total Bills', value: `$${totalAmount.toLocaleString()}`, color: 'bg-primary/10 text-primary', icon: Receipt },
     { label: 'Paid', value: `$${paidAmount.toLocaleString()}`, color: 'bg-success/10 text-success', icon: CheckCircle },
     { label: 'Pending', value: `$${pendingAmount.toLocaleString()}`, color: 'bg-warning/10 text-warning', icon: Clock },
-    { label: 'Total Records', value: hospitalBills.length, color: 'bg-accent/10 text-accent', icon: CreditCard },
+    { label: 'Total Records', value: hospitalBills.length, color: 'bg-accent/10 text-accent', icon: Receipt },
   ];
 
   const handleFileAction = async (url: string | undefined, fileName: string | undefined, action: 'view' | 'download') => {
@@ -338,24 +355,27 @@ const BillHistory: React.FC = () => {
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Badge
-                      className={cn('flex items-center gap-1', getStatusColor(bill.status))}
-                      variant="outline"
-                    >
-                      {getStatusIcon(bill.status)}
-                      {bill.status.charAt(0).toUpperCase() + bill.status.slice(1)}
-                    </Badge>
-
-                    {bill.status === 'pending' && (
-                      <Button
-                        size="sm"
-                        className="h-8 btn-primary bg-green-600 hover:bg-green-700"
-                        onClick={() => initiatePayment(bill)}
-                      >
-                        <CreditCard className="w-4 h-4 mr-1" />
-                        Pay Now
-                      </Button>
-                    )}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" className={cn('h-8 border-dashed', getStatusColor(bill.status))}>
+                          {getStatusIcon(bill.status)}
+                          <span className="ml-2 capitalize">{bill.status}</span>
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuLabel>Change Status</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => handleChangeStatus(bill.id, 'paid')}>
+                          Mark as Paid / Settled
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleChangeStatus(bill.id, 'pending')}>
+                          Mark as Pending
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleChangeStatus(bill.id, 'denied')}>
+                          Mark as Denied
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
 
                     <Button
                       variant="ghost"
@@ -368,7 +388,7 @@ const BillHistory: React.FC = () => {
                       variant="ghost"
                       size="icon"
                       className="text-primary hover:text-primary hover:bg-primary/10"
-                      onClick={() => handleAnalyzeBill(bill.fileUrl)}
+                      onClick={() => handleAnalyzeBill(bill)}
                       title="Analyze with AI"
                     >
                       <Sparkles className="w-5 h-5" />
@@ -408,13 +428,6 @@ const BillHistory: React.FC = () => {
         onClose={() => setIsAnalysisModalOpen(false)}
         result={analysisResult}
         isLoading={isAnalyzing}
-      />
-
-      <PaymentModal
-        isOpen={isPaymentModalOpen}
-        onClose={() => setIsPaymentModalOpen(false)}
-        bill={selectedBillForPayment}
-        onPaymentComplete={handlePaymentComplete}
       />
     </div>
   );

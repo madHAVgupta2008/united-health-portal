@@ -38,6 +38,7 @@ export interface BillData {
   billDate: string;
   amount: number;
   description: string;
+  analysisResult?: any; // strict typing 'BillAnalysisResult' would require import
 }
 
 export interface Bill extends BillData {
@@ -47,6 +48,7 @@ export interface Bill extends BillData {
   fileUrl?: string;
   createdAt: string;
   updatedAt: string;
+  analysisResult?: any;
 }
 
 /**
@@ -75,6 +77,7 @@ export const getBills = async (userId: string): Promise<Bill[]> => {
     fileUrl: bill.file_url || undefined,
     createdAt: bill.created_at || new Date().toISOString(),
     updatedAt: bill.updated_at || new Date().toISOString(),
+    analysisResult: bill.analysis_result || undefined,
   }));
 };
 
@@ -152,23 +155,24 @@ export const addBill = async (
     if (file) {
       try {
         // Lazy load to avoid circular dependencies if any
-        const { analyzeDocument } = await import('./ai');
+        const { analyzeBillDetails } = await import('./ai');
         const analysis = await withTimeout(
-          analyzeDocument(file),
-          20000,
+          analyzeBillDetails(file),
+          25000,
           'AI analysis timed out'
         );
-        
-        if (analysis.isValid && analysis.extractedData) {
+
+        if (analysis) {
           // Update with AI extracted intelligence
-          const updates: Record<string, string | number> = {
+          const updates: Record<string, string | number | object> = {
             status: 'pending', // Validated and ready for review
-            description: analysis.summary || data.description || ''
+            description: analysis.overview.summary || data.description || '',
+            analysis_result: analysis
           };
 
-          if (analysis.extractedData.amount) updates.amount = analysis.extractedData.amount;
-          if (analysis.extractedData.hospitalName) updates.hospital_name = analysis.extractedData.hospitalName;
-          if (analysis.extractedData.date) updates.bill_date = analysis.extractedData.date;
+          if (analysis.overview.totalAmount) updates.amount = analysis.overview.totalAmount;
+          if (analysis.overview.hospitalName) updates.hospital_name = analysis.overview.hospitalName;
+          if (analysis.overview.date) updates.bill_date = analysis.overview.date;
 
           const { data: updatedData, error: updateError } = await supabase
             .from('hospital_bills')
@@ -176,7 +180,7 @@ export const addBill = async (
             .eq('id', data.id)
             .select()
             .single();
-            
+
           if (!updateError && updatedData) {
             return {
               id: updatedData.id,
@@ -189,23 +193,24 @@ export const addBill = async (
               fileUrl: updatedData.file_url || undefined,
               createdAt: updatedData.created_at || new Date().toISOString(),
               updatedAt: updatedData.updated_at || new Date().toISOString(),
+              analysisResult: updatedData.analysis_result || undefined,
             };
           }
         } else {
           // Mark as denied/review if document seems invalid
           await supabase
             .from('hospital_bills')
-            .update({ 
-               status: 'denied', 
-               description: `AI Flag: ${analysis.summary || 'Potential invalid document'}` 
+            .update({
+              status: 'denied',
+              description: `AI Flag: Potential invalid or unreadable document`
             })
             .eq('id', data.id);
         }
-        } catch (aiError) {
+      } catch (aiError) {
         console.error('AI Analysis failed, proceeding with original data', aiError);
         // Fallback: just set to pending so it's not stuck in processing
         await supabase.from('hospital_bills').update({ status: 'pending' }).eq('id', data.id);
-        
+
         // Return updated object so UI reflects change
         return {
           id: data.id,
@@ -236,10 +241,10 @@ export const addBill = async (
     };
   } catch (error: unknown) {
     console.error('Add bill error:', error);
-    
+
     // Type guard for error messages
     const errorMessage = error instanceof Error ? error.message : typeof error === 'string' ? error : String(error);
-    
+
     // Provide user-friendly error messages
     if (errorMessage.includes('timed out')) {
       throw new Error('Upload timed out. Please check your connection and try again.');

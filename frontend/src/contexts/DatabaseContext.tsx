@@ -14,6 +14,7 @@ interface HospitalBill {
   status: 'pending' | 'paid' | 'processing' | 'denied';
   description: string;
   fileUrl?: string;
+  analysisResult?: any;
 }
 
 interface InsuranceFile {
@@ -43,6 +44,7 @@ interface DatabaseContextType {
   addChatMessage: (message: ChatMessage) => Promise<void>;
   clearChat: () => Promise<void>;
   updateBillStatus: (billId: string, status: 'pending' | 'paid' | 'processing' | 'denied') => Promise<void>;
+  updateBillAnalysis: (billId: string, analysis: any) => Promise<void>;
   deleteBill: (billId: string) => Promise<void>;
   deleteDocument: (docId: string) => Promise<void>;
   refreshData: () => Promise<void>;
@@ -75,6 +77,7 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
     status: bill.status as 'pending' | 'paid' | 'processing' | 'denied',
     description: bill.description,
     fileUrl: bill.fileUrl,
+    analysisResult: bill.analysisResult,
   }), []);
 
 
@@ -125,6 +128,7 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
         status: bill.status,
         description: bill.description,
         fileUrl: bill.fileUrl,
+        analysisResult: bill.analysisResult,
       })));
 
       // Convert documents inline
@@ -240,6 +244,11 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
     setBills(prev => prev.map(bill => bill.id === billId ? { ...bill, status } : bill));
   };
 
+  const updateBillAnalysis = async (billId: string, analysis: any): Promise<void> => {
+    // Optimistically update local state
+    setBills(prev => prev.map(bill => bill.id === billId ? { ...bill, analysisResult: analysis } : bill));
+  };
+
   const deleteBill = async (billId: string): Promise<void> => {
     await deleteBillService(billId);
     setBills(prev => prev.filter(bill => bill.id !== billId));
@@ -263,6 +272,7 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
         addChatMessage,
         clearChat,
         updateBillStatus,
+        updateBillAnalysis,
         deleteBill,
         deleteDocument,
         refreshData,

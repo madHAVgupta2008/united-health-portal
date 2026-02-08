@@ -21,6 +21,21 @@ const fetchUserContext = async () => {
       context += "Hospital Bills:\n";
       bills.data.forEach((bill: any) => {
         context += `- ${bill.hospital_name}: $${bill.amount} (${bill.status}) - Date: ${bill.bill_date}\n`;
+        if (bill.analysis_result) {
+          const analysis = bill.analysis_result;
+          if (analysis.overview?.summary) {
+            context += `  Summary: ${analysis.overview.summary}\n`;
+          }
+          if (analysis.services && analysis.services.length > 0) {
+            const servicesList = analysis.services
+              .map((s: any) => `${s.name} ($${s.charge})`)
+              .join(', ');
+            context += `  Services: ${servicesList}\n`;
+          }
+          if (analysis.coveragePrediction) {
+            context += `  Est. Coverage: ${analysis.coveragePrediction.estimatedInsuranceCoverage} (Patient: ${analysis.coveragePrediction.estimatedPatientResponsibility})\n`;
+          }
+        }
       });
     } else {
       context += "No hospital bills found.\n";
@@ -135,7 +150,7 @@ export const generateAIResponse = async (userMessage: string, chatHistory: strin
 
   try {
     const userContext = await fetchUserContext();
-    
+
     // We send the context as part of the history or prompt to the backend
     // Since the backend 'gemini-chat' function handles 'history' and 'prompt',
     // We will prepend the user context to the history for the AI to see.
@@ -349,7 +364,7 @@ export const analyzeInsuranceDetails = async (file: File): Promise<InsuranceAnal
     });
 
     if (error) throw error;
-    
+
     let text = data.text;
     if (!text) throw new Error("No response from AI");
 
