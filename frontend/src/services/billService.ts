@@ -77,7 +77,7 @@ export const getBills = async (userId: string): Promise<Bill[]> => {
     fileUrl: bill.file_url || undefined,
     createdAt: bill.created_at || new Date().toISOString(),
     updatedAt: bill.updated_at || new Date().toISOString(),
-    analysisResult: bill.analysis_result || undefined,
+    analysisResult: (bill as any).analysis_result || undefined,
   }));
 };
 
@@ -155,9 +155,72 @@ export const addBill = async (
     if (file) {
       try {
         // Lazy load to avoid circular dependencies if any
-        const { analyzeBillDetails } = await import('./ai');
+        const { analyzeBillDetails, analyzeDocument } = await import('./ai');
+
+        // Step 1: Document Classification Check
+        const classification = await withTimeout(
+          analyzeDocument(file),
+          20000,
+          'Document classification timed out'
+        );
+
+        if (!classification.isValid || classification.type !== 'bill') {
+          console.warn('Bill rejected: Type mismatch', classification.type);
+          await supabase
+            .from('hospital_bills')
+            .update({
+              status: 'denied',
+              description: `AI Rejected: Document appears to be a ${classification.type} instead of a hospital bill.`
+            })
+            .eq('id', data.id);
+
+          return {
+            id: data.id,
+            userId: data.user_id,
+            hospitalName: data.hospital_name,
+            billDate: data.bill_date,
+            amount: data.amount,
+            status: 'denied',
+            description: `AI Rejected: Document appears to be a ${classification.type} instead of a hospital bill.`,
+            fileUrl: data.file_url || undefined,
+            createdAt: data.created_at || new Date().toISOString(),
+            updatedAt: data.updated_at || new Date().toISOString(),
+          };
+        }
+
+        // Step 2: Detailed Bill Analysis
+        // Fetch active insurance policy for context
+        const { data: insuranceData } = await supabase
+          .from('insurance_documents')
+          .select('analysis_result')
+          .eq('user_id', userId)
+          .eq('status', 'approved')
+          .limit(1)
+          .maybeSingle();
+
+        let insuranceContext = '';
+        if (insuranceData && (insuranceData as any).analysis_result) {
+          const result = (insuranceData as any).analysis_result;
+          insuranceContext = `
+          Policy Details:
+          Provider: ${result.overview?.insurerName || 'Unknown'}
+          Policy Number: ${result.overview?.policyNumber || 'Unknown'}
+          Effective Date: ${result.overview?.effectiveDate || 'N/A'}
+          Expiration Date: ${result.overview?.expirationDate || 'N/A'}
+          
+          Financials:
+          - Deductible: Individual ${result.financials?.deductible?.individual || 'N/A'}, Family ${result.financials?.deductible?.family || 'N/A'}
+          - Out-of-Pocket Max: Individual ${result.financials?.outOfPocketMax?.individual || 'N/A'}, Family ${result.financials?.outOfPocketMax?.family || 'N/A'}
+          - Co-insurance: In-Network ${result.financials?.coinsuranceRate?.inNetwork || 'N/A'}, Out-of-Network ${result.financials?.coinsuranceRate?.outOfNetwork || 'N/A'}
+          - Copays: PCP ${result.financials?.copay?.pcp || 'N/A'}, Specialist ${result.financials?.copay?.specialist || 'N/A'}, ER ${result.financials?.copay?.er || 'N/A'}
+          
+          Coverage Details:
+          ${result.coverage?.map((c: any) => `- ${c.type}: Limit ${c.limit}, Deductible ${c.deductible}, Copay ${c.copay}`).join('\n') || 'No specific coverage details found.'}
+          `;
+        }
+
         const analysis = await withTimeout(
-          analyzeBillDetails(file),
+          analyzeBillDetails(file, insuranceContext),
           25000,
           'AI analysis timed out'
         );
@@ -193,7 +256,7 @@ export const addBill = async (
               fileUrl: updatedData.file_url || undefined,
               createdAt: updatedData.created_at || new Date().toISOString(),
               updatedAt: updatedData.updated_at || new Date().toISOString(),
-              analysisResult: updatedData.analysis_result || undefined,
+              analysisResult: (updatedData as any).analysis_result || undefined,
             };
           }
         } else {
@@ -271,6 +334,28 @@ export const updateBillStatus = async (
 
   if (error) {
     console.error('Error updating bill status:', error);
+    throw error;
+  }
+  if (error) {
+    console.error('Error updating bill status:', error);
+    throw error;
+  }
+};
+
+/**
+ * Update bill analysis result
+ */
+export const updateBillAnalysis = async (
+  billId: string,
+  analysis: any
+): Promise<void> => {
+  const { error } = await supabase
+    .from('hospital_bills')
+    .update({ analysis_result: analysis } as any)
+    .eq('id', billId);
+
+  if (error) {
+    console.error('Error updating bill analysis:', error);
     throw error;
   }
 };

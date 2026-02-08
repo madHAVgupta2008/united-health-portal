@@ -8,7 +8,8 @@ import {
   History,
   LogOut,
   Shield,
-  Home
+  Home,
+  Calculator
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
@@ -30,6 +31,7 @@ const navItems = [
   { path: '/chat', label: 'AI Assistant', icon: MessageCircle },
   { path: '/insurance-history', label: 'Insurance History', icon: History },
   { path: '/bill-history', label: 'Bill History', icon: Shield },
+  { path: '/cost-predictor', label: 'Cost Predictor', icon: Calculator },
 ];
 
 const Sidebar: React.FC = () => {

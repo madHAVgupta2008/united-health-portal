@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { useAuth } from './AuthContext';
-import { getBills, addBill as addBillService, updateBillStatus as updateBillStatusService, deleteBill as deleteBillService, Bill } from '@/services/billService';
-import { getDocuments, uploadDocument as uploadDocumentService, deleteDocument as deleteDocumentService, InsuranceDocument } from '@/services/insuranceService';
+import { getBills, addBill as addBillService, updateBillStatus as updateBillStatusService, updateBillAnalysis as updateBillAnalysisService, deleteBill as deleteBillService, Bill } from '@/services/billService';
+import { getDocuments, uploadDocument as uploadDocumentService, updateDocumentAnalysis as updateDocumentAnalysisService, deleteDocument as deleteDocumentService, InsuranceDocument } from '@/services/insuranceService';
 import { getChatHistory, saveChatMessage, clearChatHistory as clearChatHistoryService, ChatMessage as ChatMsg } from '@/services/chatService';
 
 export type { Bill };
@@ -25,6 +25,7 @@ interface InsuranceFile {
   status: 'pending' | 'approved' | 'rejected';
   fileSize: string;
   fileUrl: string;
+  analysisResult?: any;
 }
 
 interface ChatMessage {
@@ -46,6 +47,7 @@ interface DatabaseContextType {
   updateBillStatus: (billId: string, status: 'pending' | 'paid' | 'processing' | 'denied') => Promise<void>;
   updateBillAnalysis: (billId: string, analysis: any) => Promise<void>;
   deleteBill: (billId: string) => Promise<void>;
+  updateDocumentAnalysis: (docId: string, analysis: any) => Promise<void>;
   deleteDocument: (docId: string) => Promise<void>;
   refreshData: () => Promise<void>;
 }
@@ -90,6 +92,7 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
     status: doc.status as 'pending' | 'approved' | 'rejected',
     fileSize: formatFileSize(doc.fileSize),
     fileUrl: doc.fileUrl,
+    analysisResult: doc.analysisResult,
   }), [formatFileSize]);
 
   const convertChatMessage = useCallback((msg: ChatMsg): ChatMessage => ({
@@ -140,6 +143,7 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
         status: doc.status,
         fileSize: formatFileSize(doc.fileSize),
         fileUrl: doc.fileUrl,
+        analysisResult: doc.analysisResult,
       })));
 
       // Convert chat messages inline
@@ -240,23 +244,54 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
   };
 
   const updateBillStatus = async (billId: string, status: 'pending' | 'paid' | 'processing' | 'denied'): Promise<void> => {
-    await updateBillStatusService(billId, status);
-    setBills(prev => prev.map(bill => bill.id === billId ? { ...bill, status } : bill));
+    try {
+      await updateBillStatusService(billId, status);
+      setBills(prev => prev.map(bill => bill.id === billId ? { ...bill, status } : bill));
+    } catch (error) {
+      console.error('Error updating bill status:', error);
+      throw error;
+    }
   };
 
   const updateBillAnalysis = async (billId: string, analysis: any): Promise<void> => {
-    // Optimistically update local state
-    setBills(prev => prev.map(bill => bill.id === billId ? { ...bill, analysisResult: analysis } : bill));
+    try {
+      await updateBillAnalysisService(billId, analysis);
+      // Optimistically update local state
+      setBills(prev => prev.map(bill => bill.id === billId ? { ...bill, analysisResult: analysis } : bill));
+    } catch (error) {
+      console.error('Error updating bill analysis:', error);
+      throw error;
+    }
   };
 
   const deleteBill = async (billId: string): Promise<void> => {
-    await deleteBillService(billId);
-    setBills(prev => prev.filter(bill => bill.id !== billId));
+    try {
+      await deleteBillService(billId);
+      setBills(prev => prev.filter(bill => bill.id !== billId));
+    } catch (error) {
+      console.error('Error deleting bill:', error);
+      throw error;
+    }
+  };
+
+  const updateDocumentAnalysis = async (docId: string, analysis: any): Promise<void> => {
+    try {
+      await updateDocumentAnalysisService(docId, analysis);
+      setInsuranceFiles(prev => prev.map(doc => doc.id === docId ? { ...doc, analysisResult: analysis } : doc));
+    } catch (error) {
+      console.error('Error updating document analysis:', error);
+      throw error;
+    }
   };
 
   const deleteDocument = async (docId: string): Promise<void> => {
-    await deleteDocumentService(docId);
-    setInsuranceFiles(prev => prev.filter(doc => doc.id !== docId));
+    try {
+      await deleteDocumentService(docId);
+      setInsuranceFiles(prev => prev.filter(doc => doc.id !== docId));
+    } catch (error) {
+      console.error('Error deleting document:', error);
+      throw error;
+    }
   };
 
 
@@ -274,6 +309,7 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
         updateBillStatus,
         updateBillAnalysis,
         deleteBill,
+        updateDocumentAnalysis,
         deleteDocument,
         refreshData,
       }}

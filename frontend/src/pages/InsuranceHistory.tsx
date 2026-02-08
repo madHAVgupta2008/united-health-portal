@@ -15,7 +15,7 @@ import InsuranceAnalysisModal from '@/components/insurance/InsuranceAnalysisModa
 const InsuranceHistory: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
-  const { insuranceFiles, deleteDocument } = useDatabase();
+  const { insuranceFiles, deleteDocument, updateDocumentAnalysis } = useDatabase();
   const { toast } = useToast();
 
   const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
@@ -45,7 +45,15 @@ const InsuranceHistory: React.FC = () => {
     }
   };
 
-  const handleAnalyzeDocument = async (docUrl?: string) => {
+  const handleAnalyzeDocument = async (doc: any) => {
+    // If analysis already exists, use it
+    if (doc.analysisResult) {
+      setAnalysisResult(doc.analysisResult);
+      setIsAnalysisModalOpen(true);
+      return;
+    }
+
+    const docUrl = doc.fileUrl;
     if (!docUrl) {
       toast({
         title: "No File",
@@ -73,13 +81,27 @@ const InsuranceHistory: React.FC = () => {
       }
 
       const response = await fetch(finalUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch document: ${response.statusText}`);
+      }
       const blob = await response.blob();
-      const file = new File([blob], "document.jpg", { type: blob.type });
+
+      // Ensure we have a valid mime type, default to jpeg if unknown/octet-stream
+      const mimeType = (blob.type && blob.type !== 'application/octet-stream') ? blob.type : 'image/jpeg';
+      const file = new File([blob], "document.jpg", { type: mimeType });
 
       const result = await analyzeInsuranceDetails(file);
 
       if (result) {
         setAnalysisResult(result);
+
+        // Save result to database
+        try {
+          await updateDocumentAnalysis(doc.id, result);
+        } catch (saveError) {
+          console.error("Failed to save analysis:", saveError);
+          // Don't block UI on save failure
+        }
       } else {
         toast({
           title: "Analysis Failed",
@@ -93,7 +115,7 @@ const InsuranceHistory: React.FC = () => {
       console.error("Analysis error:", error);
       toast({
         title: "Error",
-        description: "Failed to process the insurance document.",
+        description: error instanceof Error ? error.message : "Failed to process the insurance document.",
         variant: "destructive"
       });
       setIsAnalysisModalOpen(false);
@@ -138,7 +160,6 @@ const InsuranceHistory: React.FC = () => {
   const stats = [
     { label: 'Total Documents', value: insuranceFiles.length, color: 'bg-primary/10 text-primary' },
     { label: 'Approved', value: insuranceFiles.filter((f) => f.status === 'approved').length, color: 'bg-success/10 text-success' },
-    { label: 'Pending', value: insuranceFiles.filter((f) => f.status === 'pending').length, color: 'bg-warning/10 text-warning' },
     { label: 'Rejected', value: insuranceFiles.filter((f) => f.status === 'rejected').length, color: 'bg-destructive/10 text-destructive' },
   ];
 
@@ -217,7 +238,7 @@ const InsuranceHistory: React.FC = () => {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         {stats.map((stat) => (
           <Card key={stat.label} className="card-elevated">
             <CardContent className="pt-6">
@@ -245,7 +266,7 @@ const InsuranceHistory: React.FC = () => {
               />
             </div>
             <div className="flex gap-2">
-              {['all', 'approved', 'pending', 'rejected'].map((status) => (
+              {['all', 'approved', 'rejected'].map((status) => (
                 <Button
                   key={status}
                   variant={filterStatus === status ? 'default' : 'outline'}
@@ -320,7 +341,7 @@ const InsuranceHistory: React.FC = () => {
                     size="icon"
                     className="text-primary hover:text-primary hover:bg-primary/10"
                     title="AI Analysis"
-                    onClick={() => handleAnalyzeDocument(file.fileUrl)}
+                    onClick={() => handleAnalyzeDocument(file)}
                   >
                     <Sparkles className="w-5 h-5" />
                   </Button>

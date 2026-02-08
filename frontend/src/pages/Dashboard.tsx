@@ -1,9 +1,9 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { 
-  FileText, 
-  Receipt, 
-  MessageCircle, 
+import {
+  FileText,
+  Receipt,
+  MessageCircle,
   Clock,
   TrendingUp,
   Shield,
@@ -23,7 +23,7 @@ const Dashboard: React.FC = () => {
   const { bills, insuranceFiles, isLoading } = useDatabase();
 
   const activeClaims = insuranceFiles.filter(f => f.status === 'pending').length;
-  
+
   const pendingBills = bills
     .filter(b => b.status === 'pending' || b.status === 'processing')
     .reduce((sum, bill) => sum + bill.amount, 0);
@@ -43,13 +43,13 @@ const Dashboard: React.FC = () => {
       status: b.status === 'paid' ? 'success' : 'pending'
     }))
   ]
-  .sort((a, b) => b.date.getTime() - a.date.getTime())
-  .slice(0, 4)
-  .map(item => ({
-    ...item,
-    date: item.date.toLocaleDateString(),
-    displayStatus: item.status // map to UI status
-  }));
+    .sort((a, b) => b.date.getTime() - a.date.getTime())
+    .slice(0, 4)
+    .map(item => ({
+      ...item,
+      date: item.date.toLocaleDateString(),
+      displayStatus: item.status // map to UI status
+    }));
 
   const quickActions = [
     {
@@ -115,7 +115,7 @@ const Dashboard: React.FC = () => {
                 {isLoading ? (
                   <Skeleton className="h-8 w-24 mt-1" />
                 ) : (
-                  <p className="text-2xl font-bold text-foreground mt-1">{user?.planType || 'Standard'}</p>
+                  <p className="text-2xl font-bold text-foreground mt-1">{user?.planType || 'No Plan'}</p>
                 )}
               </div>
               <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -223,10 +223,9 @@ const Dashboard: React.FC = () => {
               ) : recentActivity.length > 0 ? (
                 recentActivity.map((activity, index) => (
                   <div key={index} className="flex items-center gap-4 p-3 rounded-lg hover:bg-secondary/50 transition-colors">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                      activity.status === 'success' ? 'bg-success/10' : 
-                      activity.status === 'error' ? 'bg-destructive/10' : 'bg-warning/10'
-                    }`}>
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${activity.status === 'success' ? 'bg-success/10' :
+                        activity.status === 'error' ? 'bg-destructive/10' : 'bg-warning/10'
+                      }`}>
                       {activity.status === 'success' ? (
                         <CheckCircle className="w-5 h-5 text-success" />
                       ) : activity.status === 'error' ? (
@@ -243,10 +242,10 @@ const Dashboard: React.FC = () => {
                 ))
               ) : (
                 <div className="text-center py-8 text-muted-foreground space-y-2">
-                   <p>No recent activity</p>
-                   <Button variant="link" asChild className="text-primary p-0 h-auto">
-                     <Link to="/insurance-upload">Upload your first document</Link>
-                   </Button>
+                  <p>No recent activity</p>
+                  <Button variant="link" asChild className="text-primary p-0 h-auto">
+                    <Link to="/insurance-upload">Upload your first document</Link>
+                  </Button>
                 </div>
               )}
             </div>

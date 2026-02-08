@@ -47,6 +47,7 @@ export interface InsuranceDocument extends DocumentData {
   status: 'pending' | 'approved' | 'rejected';
   createdAt: string;
   updatedAt: string;
+  analysisResult?: any;
 }
 
 /**
@@ -75,7 +76,29 @@ export const getDocuments = async (userId: string): Promise<InsuranceDocument[]>
     status: (doc.status as InsuranceDocument['status']) || 'pending',
     createdAt: doc.created_at || new Date().toISOString(),
     updatedAt: doc.updated_at || new Date().toISOString(),
+    analysisResult: (doc as any).analysis_result || undefined,
   }));
+};
+
+/**
+ * Update document analysis result
+ */
+export const updateDocumentAnalysis = async (
+  docId: string,
+  analysis: any
+): Promise<void> => {
+  const { error } = await supabase
+    .from('insurance_documents')
+    .update({
+      analysis_result: analysis,
+      status: 'approved'
+    } as any)
+    .eq('id', docId);
+
+  if (error) {
+    console.error('Error updating document analysis:', error);
+    throw error;
+  }
 };
 
 /**
@@ -152,55 +175,81 @@ export const uploadDocument = async (
       );
 
       if (analysis.isValid) {
-        // Construct a smart filename and type based on analysis
-        // e.g. "UHC Medical Policy - 12345.pdf"
-        let smartFileName = data.file_name;
-        let smartFileType = data.file_type;
+        // Enforce strict type check
+        if (analysis.type === 'insurance') {
+          // Construct a smart filename and type based on analysis
+          // e.g. "UHC Medical Policy - 12345.pdf"
+          let smartFileName = data.file_name;
+          let smartFileType = data.file_type;
 
-        if (analysis.extractedData) {
-          const { provider, coverageType, policyNumber, documentType } = analysis.extractedData;
+          if (analysis.extractedData) {
+            const { provider, coverageType, policyNumber, documentType } = analysis.extractedData;
 
-          // Generate smart name parts
-          const parts = [];
-          if (provider) parts.push(provider);
-          if (coverageType) parts.push(coverageType);
-          if (documentType) parts.push(documentType);
+            // Generate smart name parts
+            const parts = [];
+            if (provider) parts.push(provider);
+            if (coverageType) parts.push(coverageType);
+            if (documentType) parts.push(documentType);
 
-          if (parts.length > 0) {
-            // Keep original extension
-            const ext = data.file_name.split('.').pop();
-            smartFileName = `${parts.join(' ')}${policyNumber ? ` - ${policyNumber}` : ''}.${ext}`;
+            if (parts.length > 0) {
+              // Keep original extension
+              const ext = data.file_name.split('.').pop();
+              smartFileName = `${parts.join(' ')}${policyNumber ? ` - ${policyNumber}` : ''}.${ext}`;
+            }
+
+            if (documentType) {
+              smartFileType = documentType;
+            }
           }
 
-          if (documentType) {
-            smartFileType = documentType;
+          // Auto-approve and update metadata
+          const { data: updatedData } = await supabase
+            .from('insurance_documents')
+            .update({
+              status: 'approved',
+              file_name: smartFileName,
+              file_type: smartFileType,
+              analysis_result: analysis
+            })
+            .eq('id', data.id)
+            .select()
+            .single();
+
+          if (updatedData) {
+            return {
+              id: updatedData.id,
+              userId: updatedData.user_id,
+              fileName: updatedData.file_name,
+              fileType: updatedData.file_type,
+              fileUrl: updatedData.file_url,
+              fileSize: updatedData.file_size,
+              uploadDate: updatedData.upload_date || new Date().toISOString(),
+              status: (updatedData.status as InsuranceDocument['status']) || 'pending',
+              createdAt: updatedData.created_at || new Date().toISOString(),
+              updatedAt: updatedData.updated_at || new Date().toISOString(),
+            };
           }
-        }
+        } else {
+          // REJECT: Not an insurance document
+          console.warn('Document rejected: Type mismatch', analysis.type);
+          await supabase
+            .from('insurance_documents')
+            .update({ status: 'rejected' }) // Set logic to rejected
+            .eq('id', data.id);
 
-        // Auto-approve and update metadata
-        const { data: updatedData } = await supabase
-          .from('insurance_documents')
-          .update({
-            status: 'approved',
-            file_name: smartFileName,
-            file_type: smartFileType
-          })
-          .eq('id', data.id)
-          .select()
-          .single();
-
-        if (updatedData) {
+          // We still return the object, but with status rejected. 
+          // The UI will see it as rejected.
           return {
-            id: updatedData.id,
-            userId: updatedData.user_id,
-            fileName: updatedData.file_name,
-            fileType: updatedData.file_type,
-            fileUrl: updatedData.file_url,
-            fileSize: updatedData.file_size,
-            uploadDate: updatedData.upload_date || new Date().toISOString(),
-            status: (updatedData.status as InsuranceDocument['status']) || 'pending',
-            createdAt: updatedData.created_at || new Date().toISOString(),
-            updatedAt: updatedData.updated_at || new Date().toISOString(),
+            id: data.id,
+            userId: data.user_id,
+            fileName: data.file_name,
+            fileType: data.file_type,
+            fileUrl: data.file_url,
+            fileSize: data.file_size,
+            uploadDate: data.upload_date || new Date().toISOString(),
+            status: 'rejected',
+            createdAt: data.created_at || new Date().toISOString(),
+            updatedAt: data.updated_at || new Date().toISOString(),
           };
         }
       } else {

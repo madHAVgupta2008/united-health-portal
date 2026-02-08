@@ -19,6 +19,7 @@ import AIChat from "./pages/AIChat";
 import InsuranceHistory from "./pages/InsuranceHistory";
 import BillHistory from "./pages/BillHistory";
 import ForgotPassword from "./pages/ForgotPassword";
+import CostPredictor from "./pages/CostPredictor";
 import DashboardLayout from "./components/layout/DashboardLayout";
 import NotFound from "./pages/NotFound";
 
@@ -49,6 +50,7 @@ const App = () => (
                 <Route path="/chat" element={<AIChat />} />
                 <Route path="/insurance-history" element={<InsuranceHistory />} />
                 <Route path="/bill-history" element={<BillHistory />} />
+                <Route path="/cost-predictor" element={<CostPredictor />} />
               </Route>
 
               <Route path="*" element={<NotFound />} />

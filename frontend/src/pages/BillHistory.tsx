@@ -23,7 +23,7 @@ import BillAnalysisModal from '@/components/bill/BillAnalysisModal';
 const BillHistory: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
-  const { bills: hospitalBills, updateBillStatus, updateBillAnalysis, deleteBill } = useDatabase();
+  const { bills: hospitalBills, insuranceFiles, updateBillStatus, updateBillAnalysis, deleteBill } = useDatabase();
   const { toast } = useToast();
 
   const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
@@ -66,10 +66,45 @@ const BillHistory: React.FC = () => {
       }
 
       const response = await fetch(finalUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch bill file: ${response.statusText}`);
+      }
       const blob = await response.blob();
-      const file = new File([blob], "bill.jpg", { type: blob.type });
 
-      const result = await analyzeBillDetails(file);
+      // Ensure we have a valid mime type, default to jpeg if unknown/octet-stream
+      const mimeType = (blob.type && blob.type !== 'application/octet-stream') ? blob.type : 'image/jpeg';
+      const file = new File([blob], "bill.jpg", { type: mimeType });
+
+      // Prepare Insurance Context
+      // Find the most recent approved insurance document with analysis
+      const activeInsurance = insuranceFiles.find(doc => doc.status === 'approved' && doc.analysisResult);
+      let insuranceContext = "";
+
+      if (activeInsurance && activeInsurance.analysisResult) {
+        const result = activeInsurance.analysisResult;
+        insuranceContext = `
+          Policy: ${result.overview?.insurerName || 'Unknown Insurer'} - ${result.overview?.policyNumber || 'N/A'}
+          Effective Date: ${result.overview?.effectiveDate || 'N/A'}
+          Expiration Date: ${result.overview?.expirationDate || 'N/A'}
+          
+          Financials:
+          - Deductible: Individual ${result.financials?.deductible?.individual || 'N/A'}, Family ${result.financials?.deductible?.family || 'N/A'}
+          - Out-of-Pocket Max: Individual ${result.financials?.outOfPocketMax?.individual || 'N/A'}, Family ${result.financials?.outOfPocketMax?.family || 'N/A'}
+          - Co-insurance: In-Network ${result.financials?.coinsuranceRate?.inNetwork || 'N/A'}, Out-of-Network ${result.financials?.coinsuranceRate?.outOfNetwork || 'N/A'}
+          - Copays: PCP ${result.financials?.copay?.pcp || 'N/A'}, Specialist ${result.financials?.copay?.specialist || 'N/A'}, ER ${result.financials?.copay?.er || 'N/A'}
+          
+          Coverage Details:
+          ${result.coverage?.map((c: any) => `- ${c.type}: Limit ${c.limit}, Deductible ${c.deductible}, Copay ${c.copay}`).join('\n') || 'No specific coverage details found.'}
+          
+          Benefits:
+          ${result.benefits?.filter((b: any) => b.covered).map((b: any) => `- ${b.category}: ${b.description}`).join('\n') || 'No specific benefits listed.'}
+          
+          Exclusions:
+          ${result.exclusions?.map((e: any) => `- ${e.item}: ${e.reason}`).join('\n') || 'No specific exclusions listed.'}
+        `;
+      }
+
+      const result = await analyzeBillDetails(file, insuranceContext);
 
       if (result) {
         setAnalysisResult(result);

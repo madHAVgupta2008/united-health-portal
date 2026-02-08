@@ -20,7 +20,7 @@ const AccountInfo: React.FC = () => {
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  
+
   // Theme state
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const saved = localStorage.getItem('theme');
@@ -49,8 +49,8 @@ const AccountInfo: React.FC = () => {
     document.documentElement.style.setProperty('--primary', accentColor);
     localStorage.setItem('accent_color', accentColor);
   }, [accentColor]);
-  
-  
+
+
   const [formData, setFormData] = useState({
     firstName: user?.firstName || '',
     lastName: user?.lastName || '',
@@ -58,7 +58,7 @@ const AccountInfo: React.FC = () => {
     phone: user?.phone || '',
     address: user?.address || '',
     dateOfBirth: user?.dateOfBirth || '',
-    planType: user?.planType || 'Standard',
+    planType: user?.planType || '',
   });
 
   // Sync state when user context loads/updates
@@ -71,7 +71,7 @@ const AccountInfo: React.FC = () => {
         phone: user.phone || '',
         address: user.address || '',
         dateOfBirth: user.dateOfBirth || '',
-        planType: user.planType || 'Standard',
+        planType: user.planType || '',
       });
     }
   }, [user, isEditing]);
@@ -84,7 +84,7 @@ const AccountInfo: React.FC = () => {
     setIsSaving(true);
     try {
       const success = await updateUser(formData);
-      
+
       if (success) {
         setIsEditing(false);
         toast({
@@ -242,17 +242,14 @@ const AccountInfo: React.FC = () => {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="planType">Plan Type</Label>
-                  <select
+                  <Input
                     id="planType"
                     name="planType"
                     value={formData.planType}
-                    onChange={(e) => setFormData(prev => ({ ...prev, planType: e.target.value }))}
-                    className="flex h-12 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 input-focus"
-                  >
-                    <option value="Standard">Standard</option>
-                    <option value="Premium Gold">Premium Gold</option>
-                    <option value="Platinum Elite">Platinum Elite</option>
-                  </select>
+                    onChange={handleChange}
+                    className="h-12 input-focus"
+                    placeholder="Enter your plan type (e.g. UHC Gold)"
+                  />
                 </div>
               </div>
             ) : (
@@ -333,11 +330,10 @@ const AccountInfo: React.FC = () => {
                 <button
                   key={color.name}
                   onClick={() => setAccentColor(color.value)}
-                  className={`w-8 h-8 rounded-full ${color.class} transition-all duration-200 ${
-                    accentColor === color.value 
-                      ? 'ring-2 ring-offset-2 ring-offset-card ring-primary scale-110' 
-                      : 'hover:scale-110 opacity-70 hover:opacity-100'
-                  }`}
+                  className={`w-8 h-8 rounded-full ${color.class} transition-all duration-200 ${accentColor === color.value
+                    ? 'ring-2 ring-offset-2 ring-offset-card ring-primary scale-110'
+                    : 'hover:scale-110 opacity-70 hover:opacity-100'
+                    }`}
                   title={color.name}
                   aria-label={`Select ${color.name} theme`}
                 />
