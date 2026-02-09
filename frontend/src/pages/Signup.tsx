@@ -84,10 +84,10 @@ const Signup: React.FC = () => {
 
       if (result.success) {
         toast({
-          title: 'Account created!',
-          description: 'Please check your email to verify your account.',
+          title: 'Account created successfully!',
+          description: 'Please enter your credentials to log in.',
         });
-        navigate('/verify-email', { state: { email: formData.email } });
+        navigate('/login');
       } else {
         toast({
           title: 'Signup failed',

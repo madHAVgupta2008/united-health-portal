@@ -102,6 +102,36 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
     timestamp: new Date(msg.createdAt),
   }), []);
 
+  // Helper to manage local storage cache
+  const getCacheKey = (key: string, userId: string) => `uhfi_${userId}_${key}`;
+
+  const loadFromCache = useCallback(<T,>(key: string, userId: string): T | null => {
+    try {
+      const cached = localStorage.getItem(getCacheKey(key, userId));
+      if (cached) {
+        const { data, timestamp } = JSON.parse(cached);
+        // Cache valid for 24 hours
+        if (Date.now() - timestamp < 24 * 60 * 60 * 1000) {
+          return data;
+        }
+      }
+    } catch (error) {
+      console.error(`Error loading ${key} from cache:`, error);
+    }
+    return null;
+  }, []);
+
+  const saveToCache = useCallback((key: string, userId: string, data: any) => {
+    try {
+      localStorage.setItem(getCacheKey(key, userId), JSON.stringify({
+        data,
+        timestamp: Date.now()
+      }));
+    } catch (error) {
+      console.error(`Error saving ${key} to cache:`, error);
+    }
+  }, []);
+
   // Load data when user is authenticated
   const loadData = useCallback(async () => {
     if (!user || !isAuthenticated) {
@@ -112,9 +142,23 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
       return;
     }
 
-    try {
-      setIsLoading(true);
+    // Try verifying from cache first for immediate feedback
+    const cachedBills = loadFromCache<HospitalBill[]>('bills', user.id);
+    const cachedDocs = loadFromCache<InsuranceFile[]>('insurance', user.id);
+    const cachedChat = loadFromCache<ChatMessage[]>('chat', user.id);
 
+    if (cachedBills) setBills(cachedBills);
+    if (cachedDocs) setInsuranceFiles(cachedDocs);
+    if (cachedChat) setChatHistory(cachedChat);
+
+    // If we have cached data, stop loading indicator immediately
+    if (cachedBills || cachedDocs) {
+      setIsLoading(false);
+    } else {
+      setIsLoading(true);
+    }
+
+    try {
       // Supabase mode only
       const [billsData, docsData, chatData] = await Promise.all([
         getBills(user.id),
@@ -123,7 +167,7 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
       ]);
 
       // Convert bills inline
-      setBills(billsData.map(bill => ({
+      const formattedBills = billsData.map(bill => ({
         id: bill.id,
         hospitalName: bill.hospitalName,
         billDate: bill.billDate,
@@ -132,10 +176,12 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
         description: bill.description,
         fileUrl: bill.fileUrl,
         analysisResult: bill.analysisResult,
-      })));
+      }));
+      setBills(formattedBills);
+      saveToCache('bills', user.id, formattedBills);
 
       // Convert documents inline
-      setInsuranceFiles(docsData.map(doc => ({
+      const formattedDocs = docsData.map(doc => ({
         id: doc.id,
         fileName: doc.fileName,
         fileType: doc.fileType,
@@ -144,16 +190,20 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
         fileSize: formatFileSize(doc.fileSize),
         fileUrl: doc.fileUrl,
         analysisResult: doc.analysisResult,
-      })));
+      }));
+      setInsuranceFiles(formattedDocs);
+      saveToCache('insurance', user.id, formattedDocs);
 
       // Convert chat messages inline
-      setChatHistory(chatData.map(convertChatMessage));
+      const formattedChat = chatData.map(convertChatMessage);
+      setChatHistory(formattedChat);
+      saveToCache('chat', user.id, formattedChat);
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
       setIsLoading(false);
     }
-  }, [user, isAuthenticated, formatFileSize]);
+  }, [user, isAuthenticated, formatFileSize, loadFromCache, saveToCache, convertChatMessage]);
 
   useEffect(() => {
     loadData();
@@ -177,7 +227,12 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
         },
         file
       );
-      setBills(prev => [convertBill(newBill), ...prev]);
+      const convertedBill = convertBill(newBill);
+      setBills(prev => {
+        const updated = [convertedBill, ...prev];
+        saveToCache('bills', user.id, updated);
+        return updated;
+      });
     } catch (error) {
       console.error('Error adding bill:', error);
       throw error;
@@ -200,7 +255,12 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
         },
         file
       );
-      setInsuranceFiles(prev => [convertInsuranceFile(newDoc), ...prev]);
+      const convertedDoc = convertInsuranceFile(newDoc);
+      setInsuranceFiles(prev => {
+        const updated = [convertedDoc, ...prev];
+        saveToCache('insurance', user.id, updated);
+        return updated;
+      });
     } catch (error) {
       console.error('Error uploading document:', error);
       throw error;
@@ -212,14 +272,22 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
 
     try {
       // Optimistically add to UI
-      setChatHistory(prev => [...prev, message]);
+      setChatHistory(prev => {
+        const updated = [...prev, message];
+        saveToCache('chat', user.id, updated);
+        return updated;
+      });
 
       // Supabase mode only
       await saveChatMessage(user.id, message.content, message.sender);
     } catch (error) {
       console.error('Error saving chat message:', error);
       // Revert on error
-      setChatHistory(prev => prev.filter(m => m.id !== message.id));
+      setChatHistory(prev => {
+        const updated = prev.filter(m => m.id !== message.id);
+        saveToCache('chat', user.id, updated);
+        return updated;
+      });
       throw error;
     }
   };
@@ -229,6 +297,7 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
 
     try {
       setChatHistory([]);
+      saveToCache('chat', user.id, []);
       // Supabase mode only
       await clearChatHistoryService(user.id);
     } catch (error) {
@@ -246,7 +315,11 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
   const updateBillStatus = async (billId: string, status: 'pending' | 'paid' | 'processing' | 'denied'): Promise<void> => {
     try {
       await updateBillStatusService(billId, status);
-      setBills(prev => prev.map(bill => bill.id === billId ? { ...bill, status } : bill));
+      setBills(prev => {
+        const updated = prev.map(bill => bill.id === billId ? { ...bill, status } : bill);
+        saveToCache('bills', user!.id, updated);
+        return updated;
+      });
     } catch (error) {
       console.error('Error updating bill status:', error);
       throw error;
@@ -257,7 +330,11 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
     try {
       await updateBillAnalysisService(billId, analysis);
       // Optimistically update local state
-      setBills(prev => prev.map(bill => bill.id === billId ? { ...bill, analysisResult: analysis } : bill));
+      setBills(prev => {
+        const updated = prev.map(bill => bill.id === billId ? { ...bill, analysisResult: analysis } : bill);
+        if (user) saveToCache('bills', user.id, updated);
+        return updated;
+      });
     } catch (error) {
       console.error('Error updating bill analysis:', error);
       throw error;
@@ -267,7 +344,11 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
   const deleteBill = async (billId: string): Promise<void> => {
     try {
       await deleteBillService(billId);
-      setBills(prev => prev.filter(bill => bill.id !== billId));
+      setBills(prev => {
+        const updated = prev.filter(bill => bill.id !== billId);
+        if (user) saveToCache('bills', user.id, updated);
+        return updated;
+      });
     } catch (error) {
       console.error('Error deleting bill:', error);
       throw error;
@@ -277,7 +358,11 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
   const updateDocumentAnalysis = async (docId: string, analysis: any): Promise<void> => {
     try {
       await updateDocumentAnalysisService(docId, analysis);
-      setInsuranceFiles(prev => prev.map(doc => doc.id === docId ? { ...doc, analysisResult: analysis } : doc));
+      setInsuranceFiles(prev => {
+        const updated = prev.map(doc => doc.id === docId ? { ...doc, analysisResult: analysis } : doc);
+        if (user) saveToCache('insurance', user.id, updated);
+        return updated;
+      });
     } catch (error) {
       console.error('Error updating document analysis:', error);
       throw error;
@@ -287,13 +372,16 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
   const deleteDocument = async (docId: string): Promise<void> => {
     try {
       await deleteDocumentService(docId);
-      setInsuranceFiles(prev => prev.filter(doc => doc.id !== docId));
+      setInsuranceFiles(prev => {
+        const updated = prev.filter(doc => doc.id !== docId);
+        if (user) saveToCache('insurance', user.id, updated);
+        return updated;
+      });
     } catch (error) {
       console.error('Error deleting document:', error);
       throw error;
     }
   };
-
 
   return (
     <DatabaseContext.Provider

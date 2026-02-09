@@ -227,35 +227,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         const session = data?.session;
         if (session?.user) {
-          // Only set user if email is verified
-          if (session.user.email_confirmed_at) {
-            // Check if we have a valid cached profile for this user
-            const cachedUser = getCachedUser();
-            if (cachedUser && cachedUser.id === session.user.id && cachedUser.firstName) {
-              console.log('[Profile] Using cached profile for user:', session.user.id);
-              setUser(cachedUser);
-              setIsLoading(false);
-              return;
-            }
-            
-            try {
-              const userProfile = await loadUserProfile(session.user);
-              if (userProfile) {
-                setUser(userProfile);
-              } else {
-                // Only set basic user if we don't have cached data
-                const cached = getCachedUser();
-                if (!cached || cached.id !== session.user.id) {
-                  setUser({
-                    id: session.user.id,
-                    email: session.user.email || '',
-                  });
-                }
-                // Otherwise keep the cached user
-              }
-            } catch (error) {
-              console.error('Profile load failed during init:', error);
-              // Keep cached user if we have one for this user
+          // Check if we have a valid cached profile for this user
+          const cachedUser = getCachedUser();
+          if (cachedUser && cachedUser.id === session.user.id && cachedUser.firstName) {
+            console.log('[Profile] Using cached profile for user:', session.user.id);
+            setUser(cachedUser);
+            setIsLoading(false);
+            return;
+          }
+
+          try {
+            const userProfile = await loadUserProfile(session.user);
+            if (userProfile) {
+              setUser(userProfile);
+            } else {
+              // Only set basic user if we don't have cached data
               const cached = getCachedUser();
               if (!cached || cached.id !== session.user.id) {
                 setUser({
@@ -265,9 +251,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               }
               // Otherwise keep the cached user
             }
-          } else {
-            // Email not verified, don't set user
-            console.log('Initial session: Email not verified, not setting user');
+          } catch (error) {
+            console.error('Profile load failed during init:', error);
+            // Keep cached user if we have one for this user
+            const cached = getCachedUser();
+            if (!cached || cached.id !== session.user.id) {
+              setUser({
+                id: session.user.id,
+                email: session.user.email || '',
+              });
+            }
+            // Otherwise keep the cached user
           }
         }
       } catch (error) {
@@ -281,65 +275,58 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
-        // Only set user if email is verified
-        if (session.user.email_confirmed_at) {
-          // Check if we already have a complete profile for this user
-          const currentUser = user;
-          const hasCompleteProfile = currentUser && 
-            currentUser.id === session.user.id && 
-            currentUser.firstName && 
-            currentUser.phone;
-          
-          if (hasCompleteProfile) {
-            // Keep existing profile data - no need to reload
-            console.log('[Profile] Keeping existing profile data on auth state change');
-            return;
-          }
-          
-          try {
-            const userProfile = await loadUserProfile(session.user);
-            if (userProfile) {
-              setUser(userProfile);
-            } else if (currentUser && currentUser.id === session.user.id && currentUser.firstName) {
-              // Keep existing data if profile fetch failed
-              console.log('[Profile] Keeping existing user data after failed reload');
+        // Check if we already have a complete profile for this user
+        const currentUser = user;
+        const hasCompleteProfile = currentUser &&
+          currentUser.id === session.user.id &&
+          currentUser.firstName &&
+          currentUser.phone;
+
+        if (hasCompleteProfile) {
+          // Keep existing profile data - no need to reload
+          console.log('[Profile] Keeping existing profile data on auth state change');
+          return;
+        }
+
+        try {
+          const userProfile = await loadUserProfile(session.user);
+          if (userProfile) {
+            setUser(userProfile);
+          } else if (currentUser && currentUser.id === session.user.id && currentUser.firstName) {
+            // Keep existing data if profile fetch failed
+            console.log('[Profile] Keeping existing user data after failed reload');
+          } else {
+            // Check localStorage cache as fallback
+            const cached = getCachedUser();
+            if (cached && cached.id === session.user.id && cached.firstName) {
+              console.log('[Profile] Using localStorage cache after failed reload');
+              setUser(cached);
             } else {
-              // Check localStorage cache as fallback
-              const cached = getCachedUser();
-              if (cached && cached.id === session.user.id && cached.firstName) {
-                console.log('[Profile] Using localStorage cache after failed reload');
-                setUser(cached);
-              } else {
-                setUser({
-                  id: session.user.id,
-                  email: session.user.email || '',
-                });
-              }
-            }
-          } catch (error) {
-            console.error('Profile load failed in auth change:', error);
-            // Keep existing user data if we have it for the same user
-            if (currentUser && currentUser.id === session.user.id && currentUser.firstName) {
-              console.log('[Profile] Preserving existing profile after error');
-              // Don't update - keep existing data
-            } else {
-              // Check localStorage cache as fallback
-              const cached = getCachedUser();
-              if (cached && cached.id === session.user.id && cached.firstName) {
-                console.log('[Profile] Using localStorage cache after error');
-                setUser(cached);
-              } else {
-                setUser({
-                  id: session.user.id,
-                  email: session.user.email || '',
-                });
-              }
+              setUser({
+                id: session.user.id,
+                email: session.user.email || '',
+              });
             }
           }
-        } else {
-          // Email not verified, don't set user
-          console.log('Auth state change: Email not verified, not setting user');
-          setUser(null);
+        } catch (error) {
+          console.error('Profile load failed in auth change:', error);
+          // Keep existing user data if we have it for the same user
+          if (currentUser && currentUser.id === session.user.id && currentUser.firstName) {
+            console.log('[Profile] Preserving existing profile after error');
+            // Don't update - keep existing data
+          } else {
+            // Check localStorage cache as fallback
+            const cached = getCachedUser();
+            if (cached && cached.id === session.user.id && cached.firstName) {
+              console.log('[Profile] Using localStorage cache after error');
+              setUser(cached);
+            } else {
+              setUser({
+                id: session.user.id,
+                email: session.user.email || '',
+              });
+            }
+          }
         }
       } else {
         setUser(null);
@@ -398,22 +385,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // CRITICAL: Only proceed if we have BOTH a valid user AND session
       // This prevents authentication bypass
       if (data.user && data.session) {
-        // Check if email is verified
-        if (!data.user.email_confirmed_at) {
-          console.log('Email not verified, blocking login');
-
-          // Sign out the user immediately
-          await supabase.auth.signOut();
-
-          const verificationError: AuthError = {
-            type: AuthErrorType.INVALID_CREDENTIALS,
-            message: 'Please verify your email address before logging in. Check your inbox for the verification link.',
-          };
-
-          setLastError(verificationError);
-          return { success: false, error: verificationError };
-        }
-
         // Try to load user profile, but don't block login if it fails
         try {
           const userProfile = await loadUserProfile(data.user);
@@ -486,7 +457,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           email: userData.email,
           password: userData.password,
           options: {
-            emailRedirectTo: `${window.location.origin}/verify-email`,
+            // Redirect URL Removed: direct login enabled
             data: {
               firstName: userData.firstName || '',
               lastName: userData.lastName || '',
@@ -529,14 +500,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return { success: false, error: authError };
       }
 
-      if (data.user) {
-        // Don't set user state - they need to verify email first
-        // Profile will be created by database trigger, but user won't be logged in
-        console.log('Signup successful, user must verify email before login');
+      if (data.user && data.session) {
+        // User is signed up and logged in automatically (if confirm email is off)
+        // BUT user wants to force login
+        console.log('Signup successful, forcing logout to require manual login');
 
-        // Note: We don't set the user state here because email is not verified yet
-        // The user will need to verify their email and then login
+        // Force sign out
+        await supabase.auth.signOut();
 
+        // Ensure user state is null
+        setUser(null);
+
+        return { success: true };
+      }
+
+      // Fallback if session is missing (maybe confirm email is still on?)
+      if (data.user && !data.session) {
+        console.warn('Signup successful but no session returned. Confirm Email might still be enabled in Supabase.');
         return { success: true };
       }
 
@@ -565,10 +545,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const logout = async (): Promise<void> => {
     try {
-      await supabase.auth.signOut();
-      setUser(null);
+      await withTimeout(
+        supabase.auth.signOut(),
+        5000,
+        'Logout timed out'
+      );
     } catch (error) {
       console.error('Logout error:', error);
+    } finally {
+      setUser(null);
     }
   };
 
