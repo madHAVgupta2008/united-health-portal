@@ -40,16 +40,16 @@ const Login: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Prevent double submission
     if (isSubmitting) return;
-    
+
     setIsLoading(true);
     setIsSubmitting(true);
 
     try {
       const result = await login(email, password);
-      
+
       if (result.success) {
         toast({
           title: 'Welcome back!',

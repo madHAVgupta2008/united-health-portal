@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 import { analyzeBillDetails } from '@/services/ai';
+import { formatInsuranceContext } from '@/services/insuranceService';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2, Sparkles } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -51,26 +52,20 @@ const CostPredictor: React.FC = () => {
 
         try {
             const result = activeInsurance.analysisResult;
-            const insuranceContext = `
-                Policy: ${result.overview?.insurerName || 'Unknown Insurer'} - ${result.overview?.policyNumber || 'N/A'}
-                Effective Date: ${result.overview?.effectiveDate || 'N/A'}
-                Expiration Date: ${result.overview?.expirationDate || 'N/A'}
-                
-                Financials:
-                - Deductible: Individual ${result.financials?.deductible?.individual || 'N/A'}, Family ${result.financials?.deductible?.family || 'N/A'}
-                - Out-of-Pocket Max: Individual ${result.financials?.outOfPocketMax?.individual || 'N/A'}, Family ${result.financials?.outOfPocketMax?.family || 'N/A'}
-                - Co-insurance: In-Network ${result.financials?.coinsuranceRate?.inNetwork || 'N/A'}, Out-of-Network ${result.financials?.coinsuranceRate?.outOfNetwork || 'N/A'}
-                - Copays: PCP ${result.financials?.copay?.pcp || 'N/A'}, Specialist ${result.financials?.copay?.specialist || 'N/A'}, ER ${result.financials?.copay?.er || 'N/A'}
-                
-                Coverage Details:
-                ${result.coverage?.map((c: any) => `- ${c.type}: Limit ${c.limit}, Deductible ${c.deductible}, Copay ${c.copay}`).join('\n') || 'No specific coverage details found.'}
-                
-                Benefits:
-                ${result.benefits?.filter((b: any) => b.covered).map((b: any) => `- ${b.category}: ${b.description}`).join('\n') || 'No specific benefits listed.'}
-                
-                Exclusions:
-                ${result.exclusions?.map((e: any) => `- ${e.item}: ${e.reason}`).join('\n') || 'No specific exclusions listed.'}
-            `;
+            console.log('[CostPredictor] Active insurance analysis result:', JSON.stringify(result, null, 2));
+            const insuranceContext = formatInsuranceContext(result);
+            console.log('[CostPredictor] Formatted insurance context:', insuranceContext);
+
+            if (!insuranceContext || insuranceContext.trim().length < 10) {
+                console.warn('[CostPredictor] Insurance context is empty or too short! This means the analysis result format may not match expectations.');
+                toast({
+                    title: "Insurance Data Issue",
+                    description: "Could not extract insurance details. Try re-analyzing the insurance document from Insurance History.",
+                    variant: "destructive"
+                });
+                setIsRecalculating(false);
+                return;
+            }
 
             let processed = 0;
             for (const bill of bills) {
@@ -95,12 +90,17 @@ const CostPredictor: React.FC = () => {
                     }
 
                     const response = await fetch(finalUrl);
-                    if (!response.ok) continue;
+                    if (!response.ok) {
+                        console.error(`[CostPredictor] Failed to fetch bill file: ${response.status}`);
+                        continue;
+                    }
                     const blob = await response.blob();
                     const file = new File([blob], "bill.jpg", { type: blob.type || 'image/jpeg' });
 
+                    console.log(`[CostPredictor] Re-analyzing bill ${bill.id} (${bill.hospitalName}) with insurance context...`);
                     // Re-analyze with new context
                     const analysis = await analyzeBillDetails(file, insuranceContext);
+                    console.log('[CostPredictor] Analysis result:', JSON.stringify(analysis?.coveragePrediction, null, 2));
 
                     if (analysis) {
                         // Update DB
@@ -418,8 +418,10 @@ const CostPredictor: React.FC = () => {
                                         <Info className="w-4 h-4" />
                                         AI Reasoning
                                     </h4>
-                                    <div className="p-4 bg-muted/50 rounded-lg text-sm leading-relaxed">
-                                        {selectedBill.reasoning || "No detailed reasoning provided."}
+                                    <div className="p-4 bg-primary/5 rounded-lg text-sm leading-relaxed border border-primary/10">
+                                        <p className="whitespace-pre-line text-foreground/90">
+                                            {selectedBill.reasoning || "No detailed reasoning provided."}
+                                        </p>
                                     </div>
                                 </div>
 

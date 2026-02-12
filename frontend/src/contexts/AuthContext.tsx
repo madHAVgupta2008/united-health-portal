@@ -97,10 +97,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [isLoading, setIsLoading] = useState(!(cachedUserOnInit && cachedUserOnInit.firstName));
   const [lastError, setLastError] = useState<AuthError | null>(null);
   const isMountedRef = useRef(true);
+  const userRef = useRef<User | null>(cachedUserOnInit);
 
   // Wrapper to also cache user when setting
   const setUser = (userData: User | null) => {
     setUserInternal(userData);
+    userRef.current = userData;
     if (userData && userData.firstName) {
       // Only cache complete profiles
       cacheUser(userData);
@@ -121,7 +123,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   // Enhanced profile loading with retry logic and self-healing
   const loadUserProfile = useCallback(async (
     supabaseUser: SupabaseUser,
-    retries: number = 2
+    retries: number = 1
   ): Promise<User | null> => {
     console.log('[Profile] Starting to load profile for user:', supabaseUser.id);
     for (let attempt = 0; attempt <= retries; attempt++) {
@@ -129,7 +131,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.log(`[Profile] Attempt ${attempt + 1}: Fetching profile...`);
         let profile = await withTimeout(
           getProfile(supabaseUser.id),
-          15000,
+          25000,
           'Profile fetch timed out'
         );
         console.log('[Profile] Fetch result:', profile);
@@ -275,12 +277,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
-        // Check if we already have a complete profile for this user
-        const currentUser = user;
+        // Check if we already have a complete profile for this user (use ref to avoid stale closure)
+        const currentUser = userRef.current;
         const hasCompleteProfile = currentUser &&
           currentUser.id === session.user.id &&
-          currentUser.firstName &&
-          currentUser.phone;
+          currentUser.firstName;
 
         if (hasCompleteProfile) {
           // Keep existing profile data - no need to reload

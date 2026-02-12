@@ -1,4 +1,7 @@
+
 import { supabase } from '@/integrations/supabase/client';
+
+import { formatInsuranceContext } from './insuranceService';
 
 // Helper function to wrap promises with timeout
 function withTimeout<T>(
@@ -201,22 +204,7 @@ export const addBill = async (
         let insuranceContext = '';
         if (insuranceData && (insuranceData as any).analysis_result) {
           const result = (insuranceData as any).analysis_result;
-          insuranceContext = `
-          Policy Details:
-          Provider: ${result.overview?.insurerName || 'Unknown'}
-          Policy Number: ${result.overview?.policyNumber || 'Unknown'}
-          Effective Date: ${result.overview?.effectiveDate || 'N/A'}
-          Expiration Date: ${result.overview?.expirationDate || 'N/A'}
-          
-          Financials:
-          - Deductible: Individual ${result.financials?.deductible?.individual || 'N/A'}, Family ${result.financials?.deductible?.family || 'N/A'}
-          - Out-of-Pocket Max: Individual ${result.financials?.outOfPocketMax?.individual || 'N/A'}, Family ${result.financials?.outOfPocketMax?.family || 'N/A'}
-          - Co-insurance: In-Network ${result.financials?.coinsuranceRate?.inNetwork || 'N/A'}, Out-of-Network ${result.financials?.coinsuranceRate?.outOfNetwork || 'N/A'}
-          - Copays: PCP ${result.financials?.copay?.pcp || 'N/A'}, Specialist ${result.financials?.copay?.specialist || 'N/A'}, ER ${result.financials?.copay?.er || 'N/A'}
-          
-          Coverage Details:
-          ${result.coverage?.map((c: any) => `- ${c.type}: Limit ${c.limit}, Deductible ${c.deductible}, Copay ${c.copay}`).join('\n') || 'No specific coverage details found.'}
-          `;
+          insuranceContext = formatInsuranceContext(result);
         }
 
         const analysis = await withTimeout(
@@ -349,9 +337,22 @@ export const updateBillAnalysis = async (
   billId: string,
   analysis: any
 ): Promise<void> => {
+  const updates: Record<string, any> = {
+    analysis_result: analysis,
+    status: 'pending' // Update status to pending when analysis is done
+  };
+
+  // Extract fields from analysis if available
+  if (analysis?.overview) {
+    if (analysis.overview.totalAmount) updates.amount = analysis.overview.totalAmount;
+    if (analysis.overview.hospitalName) updates.hospital_name = analysis.overview.hospitalName;
+    if (analysis.overview.date) updates.bill_date = analysis.overview.date;
+    if (analysis.overview.summary) updates.description = analysis.overview.summary;
+  }
+
   const { error } = await supabase
     .from('hospital_bills')
-    .update({ analysis_result: analysis } as any)
+    .update(updates)
     .eq('id', billId);
 
   if (error) {

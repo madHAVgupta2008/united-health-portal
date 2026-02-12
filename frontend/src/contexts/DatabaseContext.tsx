@@ -331,7 +331,19 @@ export const DatabaseProvider: React.FC<{ children: ReactNode }> = ({ children }
       await updateBillAnalysisService(billId, analysis);
       // Optimistically update local state
       setBills(prev => {
-        const updated = prev.map(bill => bill.id === billId ? { ...bill, analysisResult: analysis } : bill);
+        const updated = prev.map(bill => {
+          if (bill.id === billId) {
+            const updates: Partial<HospitalBill> = { analysisResult: analysis, status: 'pending' };
+            if (analysis?.overview) {
+              if (analysis.overview.totalAmount) updates.amount = analysis.overview.totalAmount;
+              if (analysis.overview.hospitalName) updates.hospitalName = analysis.overview.hospitalName;
+              if (analysis.overview.date) updates.billDate = analysis.overview.date;
+              if (analysis.overview.summary) updates.description = analysis.overview.summary;
+            }
+            return { ...bill, ...updates };
+          }
+          return bill;
+        });
         if (user) saveToCache('bills', user.id, updated);
         return updated;
       });

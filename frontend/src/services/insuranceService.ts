@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { analyzeDocument, analyzeInsuranceDetails, InsuranceAnalysisResult } from './ai';
 
 // Helper function to wrap promises with timeout
 function withTimeout<T>(
@@ -30,8 +31,38 @@ async function withRetry<T>(
       delay *= 2; // Exponential backoff
     }
   }
-  throw new Error('All retry attempts failed');
+  throw new Error("Analysis failed after retries");
 }
+
+/**
+ * Helper to format insurance analysis result into a context string for AI
+ */
+export const formatInsuranceContext = (result: InsuranceAnalysisResult): string => {
+  if (!result) return '';
+
+  return `
+    Policy Details:
+    Provider: ${result.overview?.insurerName || 'Unknown Insurer'}
+    Policy Number: ${result.overview?.policyNumber || 'Unknown'}
+    Effective Date: ${result.overview?.effectiveDate || 'N/A'}
+    Expiration Date: ${result.overview?.expirationDate || 'N/A'}
+    
+    Financials:
+    - Deductible: Individual ${result.financials?.deductible?.individual || 'N/A'}, Family ${result.financials?.deductible?.family || 'N/A'}
+    - Out-of-Pocket Max: Individual ${result.financials?.outOfPocketMax?.individual || 'N/A'}, Family ${result.financials?.outOfPocketMax?.family || 'N/A'}
+    - Co-insurance: In-Network ${result.financials?.coinsuranceRate?.inNetwork || 'N/A'}, Out-of-Network ${result.financials?.coinsuranceRate?.outOfNetwork || 'N/A'}
+    - Copays: PCP ${result.financials?.copay?.pcp || 'N/A'}, Specialist ${result.financials?.copay?.specialist || 'N/A'}, ER ${result.financials?.copay?.er || 'N/A'}
+    
+    Coverage Details:
+    ${result.coverage?.map((c: any) => `- ${c.type}: Limit ${c.limit}, Deductible ${c.deductible}, Copay ${c.copay}`).join('\n') || 'No specific coverage details found.'}
+    
+    Benefits (Covered Services):
+    ${result.benefits?.filter((b: any) => b.covered).map((b: any) => `- ${b.category}: ${b.description}`).join('\n') || 'No specific benefits listed.'}
+    
+    Exclusions (Not Covered):
+    ${result.exclusions?.map((e: any) => `- ${e.item}: ${e.reason}`).join('\n') || 'No specific exclusions listed.'}
+  `;
+};
 
 export interface DocumentData {
   fileName: string;
@@ -167,23 +198,24 @@ export const uploadDocument = async (
     // AI Analysis Integration (non-blocking)
     try {
       // Lazy load to avoid circular dependencies if any
-      const { analyzeDocument } = await import('./ai');
-      const analysis = await withTimeout(
+      const { analyzeDocument, analyzeInsuranceDetails } = await import('./ai');
+
+      // Step 1: Document Classification Check
+      const classification = await withTimeout(
         analyzeDocument(file),
         25000, // Increased timeout for analysis
-        'AI analysis timed out'
+        'AI classification timed out'
       );
 
-      if (analysis.isValid) {
+      if (classification.isValid) {
         // Enforce strict type check
-        if (analysis.type === 'insurance') {
-          // Construct a smart filename and type based on analysis
-          // e.g. "UHC Medical Policy - 12345.pdf"
+        if (classification.type === 'insurance') {
+          // Construct a smart filename and type based on classification
           let smartFileName = data.file_name;
           let smartFileType = data.file_type;
 
-          if (analysis.extractedData) {
-            const { provider, coverageType, policyNumber, documentType } = analysis.extractedData;
+          if (classification.extractedData) {
+            const { provider, coverageType, policyNumber, documentType } = classification.extractedData;
 
             // Generate smart name parts
             const parts = [];
@@ -202,14 +234,32 @@ export const uploadDocument = async (
             }
           }
 
-          // Auto-approve and update metadata
+          // Step 2: Run full detailed insurance analysis
+          let detailedAnalysis: any = classification; // fallback to classification
+          try {
+            console.log('Running detailed insurance analysis...');
+            const fullAnalysis = await withTimeout(
+              analyzeInsuranceDetails(file),
+              30000,
+              'Detailed insurance analysis timed out'
+            );
+            if (fullAnalysis) {
+              detailedAnalysis = fullAnalysis;
+              console.log('Detailed insurance analysis completed successfully');
+            }
+          } catch (detailError) {
+            console.warn('Detailed insurance analysis failed, using basic classification:', detailError);
+            // Continue with basic classification result as fallback
+          }
+
+          // Auto-approve and update metadata with full analysis
           const { data: updatedData } = await supabase
             .from('insurance_documents')
             .update({
               status: 'approved',
               file_name: smartFileName,
               file_type: smartFileType,
-              analysis_result: analysis
+              analysis_result: detailedAnalysis
             })
             .eq('id', data.id)
             .select()
@@ -227,18 +277,17 @@ export const uploadDocument = async (
               status: (updatedData.status as InsuranceDocument['status']) || 'pending',
               createdAt: updatedData.created_at || new Date().toISOString(),
               updatedAt: updatedData.updated_at || new Date().toISOString(),
+              analysisResult: (updatedData as any).analysis_result || undefined,
             };
           }
         } else {
           // REJECT: Not an insurance document
-          console.warn('Document rejected: Type mismatch', analysis.type);
+          console.warn('Document rejected: Type mismatch', classification.type);
           await supabase
             .from('insurance_documents')
-            .update({ status: 'rejected' }) // Set logic to rejected
+            .update({ status: 'rejected' })
             .eq('id', data.id);
 
-          // We still return the object, but with status rejected. 
-          // The UI will see it as rejected.
           return {
             id: data.id,
             userId: data.user_id,
@@ -260,7 +309,8 @@ export const uploadDocument = async (
       }
     } catch (aiError) {
       console.error('AI Analysis failed, document uploaded successfully:', aiError);
-      // Continue with original data even if AI fails
+      // Fallback: set to pending so it's not stuck
+      await supabase.from('insurance_documents').update({ status: 'pending' }).eq('id', data.id);
     }
 
     return {

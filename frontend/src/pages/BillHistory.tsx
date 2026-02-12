@@ -109,18 +109,8 @@ const BillHistory: React.FC = () => {
       if (result) {
         setAnalysisResult(result);
 
-        // Save the analysis result to the database for future use
-        const { error } = await supabase
-          .from('hospital_bills')
-          .update({ analysis_result: result } as any)
-          .eq('id', bill.id);
-
-        if (error) {
-          console.error("Failed to save analysis result:", error);
-        } else {
-          // Update the local bill object in context
-          updateBillAnalysis(bill.id, result);
-        }
+        // Save the analysis result to the database and update local state
+        await updateBillAnalysis(bill.id, result);
 
       } else {
         toast({

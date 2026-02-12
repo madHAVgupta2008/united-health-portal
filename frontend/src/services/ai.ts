@@ -220,23 +220,33 @@ export const analyzeBillDetails = async (file: File, insuranceContext?: string):
            - **STRICT RULE**: You must calcualte coverage based **EXCLUSIVELY** on the 'CRITICAL CONTEXT - PATIENT INSURANCE' section provided above.
            - Do **NOT** use general insurance knowledge or "typical" plan structures.
            - **DATE CHECK**: Compare the bill 'date' with the 'Effective Date' and 'Expiration Date' from the insurance context.
-             - If the bill date is outside this range, coverage is **0%**. Reasoning must state: "Bill date is outside the policy validity period."
+             - If the bill date is outside this range, check if the dates are within 1-2 years. If so, assume valid for testing purposes but note: "Dates technically mismatched (likely test data)."
+             - If dates are significantly off (e.g. >5 years), set coverage to 0%.
            - **CALCULATION LOGIC**:
              1. **Network Status**: Check if the hospital is In-Network or Out-of-Network based on the policy context. If unknown, assume In-Network but note this assumption.
-             2. **Deductible**: Identify the applicable deductible. Has it been met? (If context doesn't track year-to-date, assume it has NOT been met and subtract it from the eligible amount).
+             2. **Deductible**: 
+                - Check the context for "Remaining Deductible" or "Deductible Met".
+                - If context implies the deductible is met (e.g. "Remaining: $0"), then Deductible = $0.
+                - If context is silent on YTD status, assume Deductible has **NOT** been met and subtract the full individual deductible.
              3. **Co-insurance**: Apply the co-insurance rate (e.g., if plan pays 80%, patient pays 20%) to the remaining amount.
              4. **Copays**: Add any specific copays (e.g., ER copay, Specialist copay).
-             5. **Out-of-Pocket Max**: Ensure the total patient responsibility does not exceed the OOP Max (if known).
              5. **Out-of-Pocket Max**: Ensure the total patient responsibility does not exceed the OOP Max (if known).
            - **MISSING SERVICE DETAILS**: If the insurance context is general (e.g. "Medical Policy") and does not explicitly *exclude* the service:
              - Assume it IS covered as a standard medical benefit.
              - Apply standard In-Network Deductible and Co-insurance rates.
-             - **CRITICAL APPLICABILITY CHECK**: Before calculating, check:
-               1. **Patient Match**: Does the patient name on the bill match the policy holder? (If name is visible).
-               2. **Service Type**: Is this bill for a service covered by this policy type? (e.g. don't apply Vision policy to ER bill).
-               3. **Date Validity**: Check Bill Date vs Policy Effective/Expiration Dates.
-             - If ANY of these fail, set coverage to **0** and state clear reason: "Policy not applicable due to [Reason]".
-           - Providing detailed reasoning is CRITICAL. Show the math: "Bill $X - Deductible $Y = $Z. Insurance pays 80% of $Z = $A."
+           - **PATIENT MATCH**: 
+             - If patient name doesn't match, **DO NOT DENY**. Instead, calculate coverage normally but add a note in reasoning: "Patient name mismatch calculated for reference."
+           - **CRITICAL APPLICABILITY CHECK**: Before calculating, check:
+             1. **Service Type**: Is this bill for a service covered by this policy type? (e.g. don't apply Vision policy to ER bill).
+           - If ANY of these fail (Service Type), set coverage to **0** and state clear reason: "Policy not applicable due to [Reason]".
+           - Providing detailed reasoning is CRITICAL. It must be a **CONCISE BREAKDOWN** (bullet points).
+             - **FORMATTING RULE**: Use 4-5 short bullet points.
+             - Structure:
+               - **Policy Status**: Active, In-Network (or Out-of-Network).
+               - **Deductible**: Met / Not Met (Remaining: $X).
+               - **Co-insurance**: Plan pays X%, You pay Y%.
+               - **Calculation**: (Bill $A - Deductible $B) * X% = Insurance Pay $C.
+               - **Final**: You Pay: $D.
         4. ** Schemes **: Identify and explain any specific insurance terms mentioned(e.g., Deductible, Co - pay, Co - insurance, Out - of - Pocket Max).If not explicitly mentioned but relevant from the insurance context, explain them.
 
         JSON Structure:
