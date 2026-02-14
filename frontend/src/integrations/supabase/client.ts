@@ -13,5 +13,11 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, 
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,
+    detectSessionInUrl: true,
+    flowType: 'implicit',
+    // Bypass navigator.locks (Web Locks API) which fails on Safari/iOS/private browsing
+    lock: async (_name: string, _acquireTimeout: number, fn: () => Promise<any>) => {
+      return await fn();
+    },
   }
 });
